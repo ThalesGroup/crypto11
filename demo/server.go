@@ -19,7 +19,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/ThalesIgnite/crypto11"
+	"github.com/thalesignite/crypto11"
 	"io/ioutil"
 	"log"
 	"net/http"
