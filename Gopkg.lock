@@ -7,15 +7,9 @@
   packages = ["."]
   revision = "7283ca79f35edb89bc1b4ecae7f86a3680ce737f"
 
-[[projects]]
-  branch = "master"
-  name = "github.com/thalesignite/crypto11"
-  packages = ["."]
-  revision = "a5babd248e8aa87e2d7648c3f06e70e2619a39b3"
-
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "744c28abea66f1906eb2273a783abf5bfb05f056f854dc8f108c69634f056acf"
+  inputs-digest = "637fa76bf97d900f27feffdfb5bfc3a5d4fcdbe927f917bafa1bce2648c6fc21"
   solver-name = "gps-cdcl"
   solver-version = 1
