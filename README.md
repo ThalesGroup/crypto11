@@ -32,16 +32,15 @@ Installation
 
 (If you don't have one already) create [a standard Go workspace](https://golang.org/doc/code.html#Workspaces) and set the `GOPATH` environment variable to point to the workspace root.
 
-Clone and build the PKCS#11 API wrapper:
+crypto11 manages it's dependencies via `dep`.  To Install `dep` run:
 
-    cd $GOPATH/src
-    git clone https://github.com/miekg/pkcs11 github.com/miekg/pkcs11
-    go install github.com/miekg/pkcs11
+	go get -u github.com/golang/dep/cmd/dep
 
-Clone and build Crypto11:
+Clone, ensure deps, and build:
 
-    git clone git@github.com:ThalesIgnite/crypto11.git github.com/ThalesIgnite/crypto11
-    cd github.com/ThalesIgnite/crypto11
+    go get github.com/thalesignite/crypto11
+    cd $GOPATH/src/github.com/thalesignite/crypto11
+    dep ensure
     go build
 
 Edit `config` to taste, and then run the test program:
@@ -123,7 +122,7 @@ Testing with SoftHSM2
 To set up a slot:
 
     $ cat softhsm2.conf
-    directories.tokendir = /home/rjk/go/src/github.com/ThalesIgnite/crypto11/tokens
+    directories.tokendir = /home/rjk/go/src/github.com/thalesignite/crypto11/tokens
     objectstore.backend = file
     log.level = INFO
     $ mkdir tokens
