@@ -96,7 +96,7 @@ func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
 
 // GenerateRSAKeyPairOnSession creates a RSA private key on a specified slot
 //
-// Either or both label and/or id can be nil, in which case a random values will be generated.
+// Either or both label and/or id can be nil, in which case random values will be generated.
 func GenerateRSAKeyPairOnSlot(slot uint, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
 	var k *PKCS11PrivateKeyRSA
 	var err error
@@ -112,7 +112,7 @@ func GenerateRSAKeyPairOnSlot(slot uint, id []byte, label []byte, bits int) (*PK
 
 // GenerateRSAKeyPairOnSession creates an RSA private key of given length, on a specified session.
 //
-// Either or both label and/or id can be nil, in which case a random values will be generated.
+// Either or both label and/or id can be nil, in which case random values will be generated.
 //
 // RSA private keys are generated with both sign and decrypt
 // permissions, and a public exponent of 65537.
