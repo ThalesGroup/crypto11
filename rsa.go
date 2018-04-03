@@ -94,7 +94,7 @@ func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
 	return GenerateRSAKeyPairOnSlot(defaultSlot, nil, nil, bits)
 }
 
-// GenerateRSAKeyPairOnSession creates a RSA private key on a specified slot
+// GenerateRSAKeyPairOnSlot creates a RSA private key on a specified slot
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
 func GenerateRSAKeyPairOnSlot(slot uint, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
@@ -168,7 +168,7 @@ func GenerateRSAKeyPairOnSession(session pkcs11.SessionHandle, slot uint, id []b
 	return &priv, nil
 }
 
-// Decrypt decrypt a message using a RSA key.
+// Decrypt decrypts a message using a RSA key.
 //
 // This completes the implemention of crypto.Decrypter for PKCS11PrivateKeyRSA.
 //

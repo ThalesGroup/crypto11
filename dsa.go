@@ -65,7 +65,7 @@ func GenerateDSAKeyPair(params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 	return GenerateDSAKeyPairOnSlot(defaultSlot, nil, nil, params)
 }
 
-// GenerateDSAKeyPairOnSession creates a DSA private key on a specified slot
+// GenerateDSAKeyPairOnSlot creates a DSA private key on a specified slot
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
 func GenerateDSAKeyPairOnSlot(slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {

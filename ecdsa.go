@@ -226,7 +226,7 @@ func GenerateECDSAKeyPair(c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	return GenerateECDSAKeyPairOnSlot(defaultSlot, nil, nil, c)
 }
 
-// GenerateECDSAKeyPairOnSession creates an ECDSA private key using curve c, on a specified slot.
+// GenerateECDSAKeyPairOnSlot creates an ECDSA private key using curve c, on a specified slot.
 //
 // label and/or id can be nil, in which case random values will be generated.
 //
