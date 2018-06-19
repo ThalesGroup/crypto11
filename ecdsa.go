@@ -28,9 +28,10 @@ import (
 	"crypto/elliptic"
 	"encoding/asn1"
 	"errors"
-	pkcs11 "github.com/miekg/pkcs11"
 	"io"
 	"math/big"
+
+	pkcs11 "github.com/miekg/pkcs11"
 )
 
 // ErrUnsupportedEllipticCurve is returned when an elliptic curve
@@ -196,7 +197,7 @@ func unmarshalEcPoint(b []byte, c elliptic.Curve) (x *big.Int, y *big.Int, err e
 }
 
 // Export the public key corresponding to a private ECDSA key.
-func exportECDSAPublicKey(session pkcs11.SessionHandle, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
+func exportECDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
 	var err error
 	var attributes []*pkcs11.Attribute
 	var pub ecdsa.PublicKey
@@ -204,7 +205,7 @@ func exportECDSAPublicKey(session pkcs11.SessionHandle, pubHandle pkcs11.ObjectH
 		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
 	}
-	if attributes, err = libHandle.GetAttributeValue(session, pubHandle, template); err != nil {
+	if attributes, err = libHandle.GetAttributeValue(session.Handle, pubHandle, template); err != nil {
 		return nil, err
 	}
 	if pub.Curve, err = unmarshalEcParams(attributes[0].Value); err != nil {
@@ -238,7 +239,7 @@ func GenerateECDSAKeyPairOnSlot(slot uint, id []byte, label []byte, c elliptic.C
 	if err = setupSessions(slot, 0); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session pkcs11.SessionHandle) error {
+	err = withSession(slot, func(session *PKCS11Session) error {
 		k, err = GenerateECDSAKeyPairOnSession(session, slot, id, label, c)
 		return err
 	})
@@ -251,7 +252,7 @@ func GenerateECDSAKeyPairOnSlot(slot uint, id []byte, label []byte, c elliptic.C
 //
 // Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func GenerateECDSAKeyPairOnSession(session pkcs11.SessionHandle, slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+func GenerateECDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	var err error
 	var parameters []byte
 	var pub crypto.PublicKey
@@ -290,7 +291,7 @@ func GenerateECDSAKeyPairOnSession(session pkcs11.SessionHandle, slot uint, id [
 		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
 	}
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := libHandle.GenerateKeyPair(session,
+	pubHandle, privHandle, err := libHandle.GenerateKeyPair(session.Handle,
 		mech,
 		publicKeyTemplate,
 		privateKeyTemplate)

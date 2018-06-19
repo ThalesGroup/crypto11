@@ -24,9 +24,10 @@ package crypto11
 import (
 	"crypto"
 	"crypto/dsa"
-	pkcs11 "github.com/miekg/pkcs11"
 	"io"
 	"math/big"
+
+	pkcs11 "github.com/miekg/pkcs11"
 )
 
 // PKCS11PrivateKeyDSA contains a reference to a loaded PKCS#11 DSA private key object.
@@ -35,14 +36,14 @@ type PKCS11PrivateKeyDSA struct {
 }
 
 // Export the public key corresponding to a private DSA key.
-func exportDSAPublicKey(session pkcs11.SessionHandle, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
+func exportDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
 	template := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_PRIME, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_SUBPRIME, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_BASE, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_VALUE, nil),
 	}
-	exported, err := libHandle.GetAttributeValue(session, pubHandle, template)
+	exported, err := libHandle.GetAttributeValue(session.Handle, pubHandle, template)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +75,7 @@ func GenerateDSAKeyPairOnSlot(slot uint, id []byte, label []byte, params *dsa.Pa
 	if err = setupSessions(slot, 0); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session pkcs11.SessionHandle) error {
+	err = withSession(slot, func(session *PKCS11Session) error {
 		k, err = GenerateDSAKeyPairOnSession(session, slot, id, label, params)
 		return err
 	})
@@ -84,7 +85,7 @@ func GenerateDSAKeyPairOnSlot(slot uint, id []byte, label []byte, params *dsa.Pa
 // GenerateDSAKeyPairOnSession creates a DSA private key using a specified session
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
-func GenerateDSAKeyPairOnSession(session pkcs11.SessionHandle, slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+func GenerateDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 	var err error
 	var pub crypto.PublicKey
 
@@ -124,7 +125,7 @@ func GenerateDSAKeyPairOnSession(session pkcs11.SessionHandle, slot uint, id []b
 		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
 	}
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_DSA_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := libHandle.GenerateKeyPair(session,
+	pubHandle, privHandle, err := libHandle.GenerateKeyPair(session.Handle,
 		mech,
 		publicKeyTemplate,
 		privateKeyTemplate)

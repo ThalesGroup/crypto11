@@ -21,10 +21,6 @@
 
 package crypto11
 
-import (
-	pkcs11 "github.com/miekg/pkcs11"
-)
-
 // A random number reader that uses PKCS#11.
 type PKCS11RandReader struct {
 }
@@ -37,8 +33,8 @@ func (reader PKCS11RandReader) Read(data []byte) (n int, err error) {
 	if libHandle == nil {
 		return 0, ErrNotConfigured
 	}
-	if err = withSession(defaultSlot, func(session pkcs11.SessionHandle) error {
-		result, err = libHandle.GenerateRandom(session, len(data))
+	if err = withSession(defaultSlot, func(session *PKCS11Session) error {
+		result, err = libHandle.GenerateRandom(session.Handle, len(data))
 		return err
 	}); err != nil {
 		return 0, err

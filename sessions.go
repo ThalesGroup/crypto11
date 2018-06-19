@@ -22,31 +22,38 @@
 package crypto11
 
 import (
-	pkcs11 "github.com/miekg/pkcs11"
 	"sync"
+
+	"github.com/miekg/pkcs11"
 )
 
+// PKCS11Session contains a reference to a loaded PKCS#11 RSA session handle.
+type PKCS11Session struct {
+	Handle pkcs11.SessionHandle
+}
+
 // Map of slot IDs to session pools
-var sessionPools map[uint]chan pkcs11.SessionHandle = map[uint]chan pkcs11.SessionHandle{}
+var sessionPools map[uint]chan *PKCS11Session = map[uint]chan *PKCS11Session{}
 
 // Mutex protecting sessionPools
 var sessionPoolMutex sync.Mutex
 
 // Create a new session for a given slot
-func newSession(slot uint) (pkcs11.SessionHandle, error) {
-	if session, err := libHandle.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION); err != nil {
-		return 0, err
-	} else {
-		return session, nil
+func newSession(slot uint) (*PKCS11Session, error) {
+	session, err := libHandle.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+	if err != nil {
+		return nil, err
 	}
+	return &PKCS11Session{session}, nil
+
 }
 
 // Run a function with a session
 //
 // setupSessions must have been called for the slot already, otherwise
 // there will be a panic.
-func withSession(slot uint, f func(session pkcs11.SessionHandle) error) error {
-	var session pkcs11.SessionHandle
+func withSession(slot uint, f func(session *PKCS11Session) error) error {
+	var session *PKCS11Session
 	var err error
 	sessionPool := sessionPools[slot]
 	select {
@@ -73,7 +80,7 @@ func setupSessions(slot uint, max int) error {
 		max = 1024 // could be configurable
 	}
 	if _, ok := sessionPools[slot]; !ok {
-		sessionPools[slot] = make(chan pkcs11.SessionHandle, max)
+		sessionPools[slot] = make(chan *PKCS11Session, max)
 	}
 	return nil
 }

@@ -69,9 +69,10 @@ import (
 	"crypto"
 	"encoding/json"
 	"errors"
-	pkcs11 "github.com/miekg/pkcs11"
 	"log"
 	"os"
+
+	pkcs11 "github.com/miekg/pkcs11"
 )
 
 // ErrTokenNotFound represents the failure to find the requested PKCS#11 token
@@ -119,7 +120,7 @@ type PKCS11PrivateKey struct {
 
 /* Nasty globals */
 var libHandle *pkcs11.Ctx
-var session pkcs11.SessionHandle
+var session *PKCS11Session
 var defaultSlot uint
 
 // Find a token given its serial number
@@ -209,9 +210,9 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 	if err = setupSessions(defaultSlot, 0); err != nil {
 		return nil, err
 	}
-	if err = withSession(defaultSlot, func(session pkcs11.SessionHandle) error {
+	if err = withSession(defaultSlot, func(session *PKCS11Session) error {
 		if flags&pkcs11.CKF_LOGIN_REQUIRED != 0 {
-			err = libHandle.Login(session, pkcs11.CKU_USER, config.Pin)
+			err = libHandle.Login(session.Handle, pkcs11.CKU_USER, config.Pin)
 			if err != nil {
 				log.Printf("Failed to login into PKCS#11 Token: %s", err.Error())
 			}
