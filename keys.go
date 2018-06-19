@@ -88,7 +88,7 @@ func FindKeyPair(id []byte, label []byte) (crypto.PrivateKey, error) {
 func FindKeyPairOnSlot(slot uint, id []byte, label []byte) (crypto.PrivateKey, error) {
 	var err error
 	var k crypto.PrivateKey
-	if err = setupSessions(slot, 0); err != nil {
+	if err = setupSessions(slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {

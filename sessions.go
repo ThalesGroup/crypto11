@@ -87,19 +87,15 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 
 // Create the session pool for a given slot if it does not exist
 // already.
-func setupSessions(slot uint, capacity int) error {
-	if capacity <= 0 {
-		capacity = 1024
-	}
-
+func setupSessions(slot uint) error {
 	sessionPoolMutex.Lock()
 	if _, ok := sessionPools[slot]; !ok {
 		sessionPools[slot] = pools.NewResourcePool(
 			func() (pools.Resource, error) {
 				return newSession(slot)
 			},
-			capacity,
-			capacity,
+			maxSessions,
+			maxSessions,
 			idleTimeout,
 		)
 	}
