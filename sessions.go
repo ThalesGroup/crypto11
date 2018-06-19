@@ -22,9 +22,18 @@
 package crypto11
 
 import (
+	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/miekg/pkcs11"
+	"github.com/youtube/vitess/go/pools"
+)
+
+const (
+	idleTimeout       = 30 * time.Second
+	newSessionTimeout = 15 * time.Second
 )
 
 // PKCS11Session contains a reference to a loaded PKCS#11 RSA session handle.
@@ -33,10 +42,10 @@ type PKCS11Session struct {
 }
 
 // Map of slot IDs to session pools
-var sessionPools map[uint]chan *PKCS11Session = map[uint]chan *PKCS11Session{}
+var sessionPools = map[uint]*pools.ResourcePool{}
 
 // Mutex protecting sessionPools
-var sessionPoolMutex sync.Mutex
+var sessionPoolMutex sync.RWMutex
 
 // Create a new session for a given slot
 func newSession(slot uint) (*PKCS11Session, error) {
@@ -45,42 +54,56 @@ func newSession(slot uint) (*PKCS11Session, error) {
 		return nil, err
 	}
 	return &PKCS11Session{session}, nil
+}
 
+// Close closes the session.
+func (session *PKCS11Session) Close() {
+	libHandle.CloseSession(session.Handle)
 }
 
 // Run a function with a session
 //
 // setupSessions must have been called for the slot already, otherwise
-// there will be a panic.
+// an error will be returned.
 func withSession(slot uint, f func(session *PKCS11Session) error) error {
-	var session *PKCS11Session
-	var err error
+	sessionPoolMutex.RLock()
 	sessionPool := sessionPools[slot]
-	select {
-	case session = <-sessionPool:
-		// nop
-	default:
-		if session, err = newSession(slot); err != nil {
-			return err
-		}
+	sessionPoolMutex.RUnlock()
+	if sessionPool == nil {
+		return fmt.Errorf("crypto11: no session for slot %d", slot)
 	}
-	defer func() {
-		// TODO better would be to close the session if the pool is full
-		sessionPool <- session
-	}()
-	return f(session)
+
+	ctx, cancel := context.WithTimeout(context.Background(), newSessionTimeout)
+	defer cancel()
+
+	session, err := sessionPool.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer sessionPool.Put(session)
+
+	return f(session.(*PKCS11Session))
 }
 
 // Create the session pool for a given slot if it does not exist
 // already.
-func setupSessions(slot uint, max int) error {
+func setupSessions(slot uint, capacity int) error {
+	if capacity <= 0 {
+		capacity = 1024
+	}
+
 	sessionPoolMutex.Lock()
-	defer sessionPoolMutex.Unlock()
-	if max <= 0 {
-		max = 1024 // could be configurable
-	}
 	if _, ok := sessionPools[slot]; !ok {
-		sessionPools[slot] = make(chan *PKCS11Session, max)
+		sessionPools[slot] = pools.NewResourcePool(
+			func() (pools.Resource, error) {
+				return newSession(slot)
+			},
+			capacity,
+			capacity,
+			idleTimeout,
+		)
 	}
+	sessionPoolMutex.Unlock()
+
 	return nil
 }
