@@ -51,7 +51,11 @@ var dsaSizes = map[dsa.ParameterSizes]*dsa.Parameters{
 }
 
 func dsaParameters(p, q, g string) *dsa.Parameters {
-	var params = dsa.Parameters{new(big.Int), new(big.Int), new(big.Int)}
+	var params = dsa.Parameters{
+		P: new(big.Int),
+		Q: new(big.Int),
+		G: new(big.Int),
+	}
 	params.P.SetString(p, 10)
 	params.Q.SetString(q, 10)
 	params.G.SetString(g, 10)
@@ -79,7 +83,13 @@ func (signer *DSAPrivateKey) Public() crypto.PublicKey {
 func TestNativeDSA(t *testing.T) {
 	var err error
 	for psize, params := range dsaSizes {
-		var key = &dsa.PrivateKey{dsa.PublicKey{*params, nil}, nil}
+		var key = &dsa.PrivateKey{
+			PublicKey: dsa.PublicKey{
+				Parameters: *params,
+				Y:          nil,
+			},
+			X: nil,
+		}
 		if err = dsa.GenerateKey(key, rand.Reader); err != nil {
 			t.Errorf("crypto.dsa.GenerateKey: %v", err)
 			return

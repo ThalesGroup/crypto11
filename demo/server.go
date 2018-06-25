@@ -17,7 +17,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"github.com/thalesignite/crypto11"
 	"io/ioutil"
@@ -49,12 +48,12 @@ func useHardwareKey(config *tls.Config, keyLabel string, certFile string) error 
 			break
 		}
 		if certDER.Type != "CERTIFICATE" {
-			return errors.New(fmt.Sprintf("%s: unexpected type %s", certFile, certDER.Type))
+			return fmt.Errorf("%s: unexpected type %s", certFile, certDER.Type)
 		}
 		cert.Certificate = append(cert.Certificate, certDER.Bytes)
 	}
 	if len(cert.Certificate) == 0 {
-		return errors.New(fmt.Sprintf("%s: no certificates found", certFile))
+		return fmt.Errorf("%s: no certificates found", certFile)
 	}
 	// Load the private key.
 	log.Printf("loading key CKA_LABEL=%s", keyLabel)
@@ -70,13 +69,13 @@ func useHardwareKey(config *tls.Config, keyLabel string, certFile string) error 
 	case *rsa.PublicKey:
 		if keyPubKey, ok := key.(crypto.Signer).Public().(*rsa.PublicKey); ok {
 			if certPubKey.E != keyPubKey.E || certPubKey.N.Cmp(keyPubKey.N) != 0 {
-				return errors.New(fmt.Sprintf("%s: public key does not match CKA_LABEL=%s", certFile, keyLabel))
+				return fmt.Errorf("%s: public key does not match CKA_LABEL=%s", certFile, keyLabel)
 			}
 		} else {
-			return errors.New(fmt.Sprintf("%s: key type does not match CKA_LABEL=%s", certFile, keyLabel))
+			return fmt.Errorf("%s: key type does not match CKA_LABEL=%s", certFile, keyLabel)
 		}
 	default:
-		return errors.New(fmt.Sprintf("%s: key type not implemented", certFile))
+		return fmt.Errorf("%s: key type not implemented", certFile)
 	}
 	// It's all good, update the configuration
 	config.Certificates = []tls.Certificate{cert}

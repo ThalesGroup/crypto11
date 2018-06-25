@@ -131,7 +131,10 @@ func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash
 	h := hashFunction.New()
 	h.Write(plaintext)
 	plaintextHash := h.Sum([]byte{}) // weird API
-	pssOptions := &rsa.PSSOptions{rsa.PSSSaltLengthEqualsHash, hashFunction}
+	pssOptions := &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthEqualsHash,
+		Hash:       hashFunction,
+	}
 	if sig, err = key.Sign(rand.Reader, plaintextHash, pssOptions); err != nil {
 		t.Errorf("PSS Sign (hash %v): %v", hashFunction, err)
 		return
@@ -178,7 +181,9 @@ func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 		t.Errorf("PKCS#1v1.5 Decrypt (nil options): wrong answer")
 		return
 	}
-	options := &rsa.PKCS1v15DecryptOptions{0}
+	options := &rsa.PKCS1v15DecryptOptions{
+		SessionKeyLen: 0,
+	}
 	if decrypted, err = key.Decrypt(rand.Reader, ciphertext, options); err != nil {
 		t.Errorf("PKCS#1v1.5 Decrypt %v", err)
 		return
@@ -200,7 +205,10 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 		t.Errorf("OAEP Encrypt: %v", err)
 		return
 	}
-	options := &rsa.OAEPOptions{hashFunction, label}
+	options := &rsa.OAEPOptions{
+		Hash:  hashFunction,
+		Label: label,
+	}
 	if decrypted, err = key.Decrypt(rand.Reader, ciphertext, options); err != nil {
 		t.Errorf("OAEP Decrypt %v", err)
 		return
