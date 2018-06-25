@@ -69,9 +69,17 @@ import (
 	"crypto"
 	"encoding/json"
 	"errors"
-	pkcs11 "github.com/miekg/pkcs11"
+	"fmt"
 	"log"
 	"os"
+
+	pkcs11 "github.com/miekg/pkcs11"
+)
+
+const (
+	// DefaultMaxSessions controls the maximum number of concurrent sessions to
+	// open, unless otherwise specified in the PKCS11Config object.
+	DefaultMaxSessions = 1024
 )
 
 // ErrTokenNotFound represents the failure to find the requested PKCS#11 token
@@ -119,24 +127,25 @@ type PKCS11PrivateKey struct {
 
 /* Nasty globals */
 var libHandle *pkcs11.Ctx
-var session pkcs11.SessionHandle
+var session *PKCS11Session
 var defaultSlot uint
+var maxSessions int
 
 // Find a token given its serial number
-func findToken(slots []uint, serial string, label string) (uint, uint, error) {
+func findToken(slots []uint, serial string, label string) (uint, *pkcs11.TokenInfo, error) {
 	for _, slot := range slots {
 		tokenInfo, err := libHandle.GetTokenInfo(slot)
 		if err != nil {
-			return 0, 0, err
+			return 0, nil, err
 		}
 		if tokenInfo.SerialNumber == serial {
-			return slot, tokenInfo.Flags, nil
+			return slot, &tokenInfo, nil
 		}
 		if tokenInfo.Label == label {
-			return slot, tokenInfo.Flags, nil
+			return slot, &tokenInfo, nil
 		}
 	}
-	return 0, 0, ErrTokenNotFound
+	return 0, nil, ErrTokenNotFound
 }
 
 // PKCS11Config holds PKCS#11 configuration information.
@@ -157,6 +166,9 @@ type PKCS11Config struct {
 
 	// User PIN (password)
 	Pin string
+
+	// Maximum number of concurrent sessions to open
+	MaxSessions int
 }
 
 // Configure configures PKCS#11 from a PKCS11Config.
@@ -202,16 +214,28 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 		log.Printf("Failed to list PKCS#11 Slots: %s", err.Error())
 		return nil, err
 	}
-	if defaultSlot, flags, err = findToken(slots, config.TokenSerial, config.TokenLabel); err != nil {
+	slot, token, err := findToken(slots, config.TokenSerial, config.TokenLabel)
+	if err != nil {
 		log.Printf("Failed to find Token in any Slot: %s", err.Error())
 		return nil, err
 	}
-	if err = setupSessions(defaultSlot, 0); err != nil {
+	defaultSlot = slot
+	flags = token.Flags
+
+	maxSessions = config.MaxSessions
+	if maxSessions == 0 {
+		maxSessions = DefaultMaxSessions
+	}
+	if token.MaxRwSessionCount > 0 && uint(maxSessions) > token.MaxRwSessionCount {
+		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)", maxSessions, token.MaxRwSessionCount)
+	}
+
+	if err = setupSessions(defaultSlot); err != nil {
 		return nil, err
 	}
-	if err = withSession(defaultSlot, func(session pkcs11.SessionHandle) error {
+	if err = withSession(defaultSlot, func(session *PKCS11Session) error {
 		if flags&pkcs11.CKF_LOGIN_REQUIRED != 0 {
-			err = libHandle.Login(session, pkcs11.CKU_USER, config.Pin)
+			err = libHandle.Login(session.Handle, pkcs11.CKU_USER, config.Pin)
 			if err != nil {
 				log.Printf("Failed to login into PKCS#11 Token: %s", err.Error())
 			}

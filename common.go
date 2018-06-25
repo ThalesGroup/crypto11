@@ -5,9 +5,10 @@ import (
 	"encoding/asn1"
 	"encoding/base64"
 	"errors"
-	pkcs11 "github.com/miekg/pkcs11"
 	"math/big"
 	"unsafe"
+
+	pkcs11 "github.com/miekg/pkcs11"
 )
 
 // ErrMalformedDER represents a failure to decode an ASN.1-encoded message
@@ -77,11 +78,11 @@ func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byt
 	var sigBytes []byte
 	var sig dsaSignature
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(mechanism, nil)}
-	err = withSession(slot, func(session pkcs11.SessionHandle) error {
-		if err = libHandle.SignInit(session, mech, key); err != nil {
+	err = withSession(slot, func(session *PKCS11Session) error {
+		if err = libHandle.SignInit(session.Handle, mech, key); err != nil {
 			return err
 		}
-		sigBytes, err = libHandle.Sign(session, digest)
+		sigBytes, err = libHandle.Sign(session.Handle, digest)
 		return err
 	})
 	if err != nil {
