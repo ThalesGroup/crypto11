@@ -52,8 +52,8 @@ func TestNativeRSA(t *testing.T) {
 					return
 				}
 			})
-			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits) })
-			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits) })
+			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, ^uint(0)) })
+			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, ^uint(0)) })
 		})
 	}
 	Close()
@@ -81,8 +81,8 @@ func TestHardRSA(t *testing.T) {
 					return
 				}
 			})
-			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits) })
-			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits) })
+			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, key.Slot) })
+			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, key.Slot) })
 			t.Run("FindId", func(t *testing.T) {
 				// Get a fresh handle to  the key
 				if id, label, err = key.Identify(); err != nil {
@@ -98,7 +98,7 @@ func TestHardRSA(t *testing.T) {
 				if key2 == nil {
 					t.SkipNow()
 				}
-				testRsaSigning(t, key2.(*PKCS11PrivateKeyRSA), nbits)
+				testRsaSigning(t, key2.(*PKCS11PrivateKeyRSA), nbits, key2.(*PKCS11PrivateKeyRSA).Slot)
 			})
 			t.Run("FindLabel", func(t *testing.T) {
 				if key3, err = FindKeyPair(nil, label); err != nil {
@@ -110,26 +110,26 @@ func TestHardRSA(t *testing.T) {
 				if key3 == nil {
 					t.SkipNow()
 				}
-				testRsaSigning(t, key3.(crypto.Signer), nbits)
+				testRsaSigning(t, key3.(crypto.Signer), nbits, key3.(*PKCS11PrivateKeyRSA).Slot)
 			})
 		})
 	}
 	Close()
 }
 
-func testRsaSigning(t *testing.T, key crypto.Signer, nbits int) {
+func testRsaSigning(t *testing.T, key crypto.Signer, nbits int, slot uint) {
 	t.Run("SHA1", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA1) })
 	t.Run("SHA224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA224) })
 	t.Run("SHA256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA256) })
 	t.Run("SHA384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA384) })
 	t.Run("SHA512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA512) })
-	t.Run("PSSSHA1", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA1) })
-	t.Run("PSSSHA224", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA224) })
-	t.Run("PSSSHA256", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA256) })
-	t.Run("PSSSHA384", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA384) })
+	t.Run("PSSSHA1", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA1, slot) })
+	t.Run("PSSSHA224", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA224, slot) })
+	t.Run("PSSSHA256", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA256, slot) })
+	t.Run("PSSSHA384", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA384, slot) })
 	t.Run("PSSSHA512", func(t *testing.T) {
 		if nbits > 1024 {
-			testRsaSigningPSS(t, key, crypto.SHA512)
+			testRsaSigningPSS(t, key, crypto.SHA512, slot)
 		} else {
 			t.Skipf("key too smol for SHA512 with sLen=hLen")
 		}
@@ -154,10 +154,11 @@ func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto
 	}
 }
 
-func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
+func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, slot uint) {
 	var err error
 	var sig []byte
 
+	needMechanism(t, slot, pkcs11.CKM_RSA_PKCS_PSS)
 	plaintext := []byte("sign me with PSS")
 	h := hashFunction.New()
 	h.Write(plaintext)
@@ -176,26 +177,26 @@ func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash
 	}
 }
 
-func testRsaEncryption(t *testing.T, key crypto.Decrypter, nbits int) {
+func testRsaEncryption(t *testing.T, key crypto.Decrypter, nbits int, slot uint) {
 	t.Run("PKCS1v15", func(t *testing.T) { testRsaEncryptionPKCS1v15(t, key) })
-	t.Run("OAEPSHA1", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{}) })
-	t.Run("OAEPSHA224", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{}) })
-	t.Run("OAEPSHA256", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{}) })
-	t.Run("OAEPSHA384", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{}) })
+	t.Run("OAEPSHA1", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{}, slot) })
+	t.Run("OAEPSHA224", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{}, slot) })
+	t.Run("OAEPSHA256", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{}, slot) })
+	t.Run("OAEPSHA384", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{}, slot) })
 	t.Run("OAEPSHA512", func(t *testing.T) {
 		if nbits > 1024 {
-			testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{})
+			testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{}, slot)
 		} else {
 			t.Skipf("key too smol for SHA512")
 		}
 	})
-	t.Run("OAEPSHA1Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{1, 2, 3, 4}) })
-	t.Run("OAEPSHA224Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{5, 6, 7, 8}) })
-	t.Run("OAEPSHA256Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{9}) })
-	t.Run("OAEPSHA384Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{10, 11, 12, 13, 14, 15}) })
+	t.Run("OAEPSHA1Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{1, 2, 3, 4}, slot) })
+	t.Run("OAEPSHA224Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{5, 6, 7, 8}, slot) })
+	t.Run("OAEPSHA256Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{9}, slot) })
+	t.Run("OAEPSHA384Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{10, 11, 12, 13, 14, 15}, slot) })
 	t.Run("OAEPSHA512Label", func(t *testing.T) {
 		if nbits > 1024 {
-			testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{16, 17, 18})
+			testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{16, 17, 18}, slot)
 		} else {
 			t.Skipf("key too smol for SHA512")
 		}
@@ -233,9 +234,11 @@ func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 	}
 }
 
-func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction crypto.Hash, label []byte) {
+func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction crypto.Hash, label []byte, slot uint) {
 	var err error
 	var ciphertext, decrypted []byte
+	needMechanism(t, slot, pkcs11.CKM_RSA_PKCS_OAEP)
+	// Doesn't seem to be a way to query supported MGFs so we do that the hard way.
 	var info pkcs11.Info
 	if info, err = libHandle.GetInfo(); err != nil {
 		t.Errorf("GetInfo: %v", err)
@@ -263,4 +266,23 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 		t.Errorf("OAEP Decrypt: wrong answer")
 		return
 	}
+}
+
+func needMechanism(t *testing.T, slot uint, wantMech uint) {
+	var err error
+	var mechs []*pkcs11.Mechanism
+
+	if slot == ^uint(0) { // not using PKCS#11
+		return
+	}
+	if mechs, err = libHandle.GetMechanismList(slot); err != nil {
+		t.Errorf("GetMechanismList: %v", err)
+		return
+	}
+	for _, mech := range mechs {
+		if mech.Mechanism == wantMech {
+			return
+		}
+	}
+	t.Skipf("mechanism %v not supported", wantMech)
 }
