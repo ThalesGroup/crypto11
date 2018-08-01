@@ -45,7 +45,7 @@ Clone, ensure deps, and build:
 
 Edit `config` to taste, and then run the test program:
 
-    go test
+    go test  -count=1
 
 Testing Guidance
 ================
