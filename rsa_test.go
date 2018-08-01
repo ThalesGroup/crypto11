@@ -88,6 +88,7 @@ func TestHardRSA(t *testing.T) {
 		}
 		testRsaSigning(t, key3.(crypto.Signer), nbits)
 	}
+	Close()
 }
 
 func testRsaSigning(t *testing.T, key crypto.Signer, nbits int) {

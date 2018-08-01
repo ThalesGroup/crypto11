@@ -1,4 +1,4 @@
-// Copyright 2016, 2017 Thales e-Security, Inc
+// Copyright 2018 Thales e-Security, Inc
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -22,16 +22,40 @@
 package crypto11
 
 import (
+	"crypto"
+	"crypto/dsa"
+	"fmt"
 	"testing"
 )
 
-func TestInitializeFromConfig(t *testing.T) {
-	var config PKCS11Config
-	config.Path = "NoSuchFile"
-	config.Pin = "NoSuchPin"
-	config.TokenSerial = "NoSuchToken"
-	config.TokenLabel = "NoSuchToken"
-	//assert.Panics(Configure(config), "Invalid config should panic")
+func TestClose(t *testing.T) {
+	// Verify that close and re-open works.
+	var err error
+	var key *PKCS11PrivateKeyDSA
 	ConfigureFromFile("config")
+	psize := dsa.L1024N160
+	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
+		t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
+		return
+	}
+	if key == nil {
+		t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
+		return
+	}
+	var id []byte
+	if id, _, err = key.Identify(); err != nil {
+		t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
+		return
+	}
 	Close()
+	for i := 0; i < 5; i++ {
+		ConfigureFromFile("config")
+		var key2 crypto.PrivateKey
+		if key2, err = FindKeyPair(id, nil); err != nil {
+			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
+			return
+		}
+		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", i))
+		Close()
+	}
 }

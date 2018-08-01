@@ -92,6 +92,7 @@ func TestHardECDSA(t *testing.T) {
 		}
 		testEcdsaSigning(t, key3.(crypto.Signer), crypto.SHA384)
 	}
+	Close()
 }
 
 func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {

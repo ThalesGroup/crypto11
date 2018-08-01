@@ -130,6 +130,7 @@ func TestHardDSA(t *testing.T) {
 		}
 		testDsaSigning(t, key3.(crypto.Signer), psize, "hard3")
 	}
+	Close()
 }
 
 func testDsaSigning(t *testing.T, key crypto.Signer, psize dsa.ParameterSizes, what string) {

@@ -33,6 +33,7 @@ var signaturesPerThread = 256
 func TestThreadedRSA(t *testing.T) {
 	var err error
 	var key *PKCS11PrivateKeyRSA
+	ConfigureFromFile("config")
 	if key, err = GenerateRSAKeyPair(1024); err != nil {
 		t.Errorf("crypto11.GenerateRSAKeyPair: %v", err)
 		return
@@ -53,6 +54,7 @@ func TestThreadedRSA(t *testing.T) {
 	t.Logf("Made %v signatures in %v elapsed (%v/s)",
 		threadCount*signaturesPerThread,
 		elapsed, float64(threadCount*signaturesPerThread)/elapsed)
+	Close()
 }
 
 func signingRoutine(t *testing.T, key crypto.Signer, done chan int) {
