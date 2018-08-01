@@ -147,6 +147,14 @@ The configuration looks like this:
 
 (At time of writing) PSS and OAEP aren't supported so expect test failures.
 
+Limitations
+===========
+
+ * The [PKCS1v15DecryptOptions SessionKeyLen](https://golang.org/pkg/crypto/rsa/#PKCS1v15DecryptOptions) field
+is not implemented and an error is returned if it is nonzero.
+The reason for this is that it is not possible for crypto11 to guarantee the constant-time behavior in the specification.
+See [issue #5](https://github.com/ThalesIgnite/crypto11/issues/5) for further discussion.
+
 Wishlist
 ========
 

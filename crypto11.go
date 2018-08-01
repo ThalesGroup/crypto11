@@ -21,7 +21,7 @@
 
 // Package crypto11 enables access to cryptographic keys from PKCS#11 using Go crypto API.
 //
-// For simple use:
+// Simple use
 //
 // 1. Either write a configuration file (see ConfigureFromFile) or
 // define a configuration in your application (see PKCS11Config and
@@ -40,7 +40,7 @@
 // or to *PKCS11PrivateKeyDSA, *PKCS11PrivateKeyECDSA or
 // *PKCS11PrivateKeyRSA.
 //
-// Sessions and concurrency:
+// Sessions and concurrency
 //
 // Note that PKCS#11 session handles must not be used concurrently
 // from multiple threads. Consumers of the Signer interface know
@@ -63,6 +63,13 @@
 // welcome.
 //
 // See also https://golang.org/pkg/crypto/
+//
+// Limitations
+//
+// The PKCS1v15DecryptOptions SessionKeyLen field is not implemented
+// and an error is returned if it is nonzero.
+// The reason for this is that it is not possible for crypto11 to guarantee the constant-time behavior in the specification.
+// See https://github.com/thalesignite/crypto11/issues/5 for further discussion.
 package crypto11
 
 import (
