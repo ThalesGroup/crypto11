@@ -29,6 +29,7 @@ import (
 
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
+	"errors"
 )
 
 const (
@@ -36,29 +37,56 @@ const (
 	newSessionTimeout = 15 * time.Second
 )
 
-// PKCS11Session contains a reference to a loaded PKCS#11 RSA session handle.
+// PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
 type PKCS11Session struct {
+	Ctx *pkcs11.Ctx
 	Handle pkcs11.SessionHandle
 }
 
-// Map of slot IDs to session pools
-var sessionPools = map[uint]*pools.ResourcePool{}
+// sessionPool is a thread safe pool of PKCS#11 sessions
+type sessionPool struct {
+	m sync.RWMutex
+	pool map[uint]*pools.ResourcePool
+}
 
-// Mutex protecting sessionPools
-var sessionPoolMutex sync.RWMutex
+// Map of slot IDs to session pools
+var pool = &sessionPool{pool: map[uint]*pools.ResourcePool{}}
+
+// Error specifies an event when the requested slot is already set in the sessions pool
+var errSlotBusy = errors.New("pool slot busy")
+// Error when there is no pool at specific slot in the sessions pool
+var errPoolNotFound = errors.New("pool not found")
 
 // Create a new session for a given slot
-func newSession(slot uint) (*PKCS11Session, error) {
-	session, err := libHandle.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+func newSession(ctx *pkcs11.Ctx, slot uint) (*PKCS11Session, error) {
+	session, err := ctx.OpenSession(slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
 		return nil, err
 	}
-	return &PKCS11Session{session}, nil
+	return &PKCS11Session{ctx, session}, nil
 }
 
 // Close closes the session.
 func (session *PKCS11Session) Close() {
-	libHandle.CloseSession(session.Handle)
+	session.Ctx.CloseSession(session.Handle)
+}
+
+// Get returns requested resource pool by slot id
+func (p *sessionPool) Get(slot uint) *pools.ResourcePool {
+	p.m.RLock()
+	defer p.m.RUnlock()
+	return p.pool[slot]
+}
+
+// Put stores new resource pool into the pool if the requested slot is free
+func (p *sessionPool) PutIfAbsent(slot uint, pool *pools.ResourcePool) error {
+	p.m.Lock()
+	defer p.m.Unlock()
+	if _, ok := p.pool[slot]; ok {
+		return errSlotBusy
+	}
+	p.pool[slot] = pool
+	return nil
 }
 
 // Run a function with a session
@@ -66,9 +94,7 @@ func (session *PKCS11Session) Close() {
 // setupSessions must have been called for the slot already, otherwise
 // an error will be returned.
 func withSession(slot uint, f func(session *PKCS11Session) error) error {
-	sessionPoolMutex.RLock()
-	sessionPool := sessionPools[slot]
-	sessionPoolMutex.RUnlock()
+	sessionPool := pool.Get(slot)
 	if sessionPool == nil {
 		return fmt.Errorf("crypto11: no session for slot %d", slot)
 	}
@@ -85,21 +111,39 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 	return f(session.(*PKCS11Session))
 }
 
+// Ensures that sessions are setup.
+func ensureSessions(ctx* pkcs11.Ctx, slot uint) error {
+	if err := setupSessions(ctx, slot); err != nil && err != errSlotBusy {
+		return err
+	}
+	return nil
+}
+
 // Create the session pool for a given slot if it does not exist
 // already.
-func setupSessions(slot uint) error {
-	sessionPoolMutex.Lock()
-	if _, ok := sessionPools[slot]; !ok {
-		sessionPools[slot] = pools.NewResourcePool(
-			func() (pools.Resource, error) {
-				return newSession(slot)
-			},
-			maxSessions,
-			maxSessions,
-			idleTimeout,
-		)
+func setupSessions(ctx* pkcs11.Ctx, slot uint) error {
+	return pool.PutIfAbsent(slot, pools.NewResourcePool(
+		func() (pools.Resource, error) {
+			return newSession(ctx, slot)
+		},
+		maxSessions,
+		maxSessions,
+		idleTimeout,
+	))
+}
+
+// Releases a sessions specific to the requested slot if present.
+func (p *sessionPool) closeSessions(slot uint) error {
+	p.m.Lock()
+	defer p.m.Unlock()
+
+	rp, ok := p.pool[slot]
+	if !ok {
+		return errPoolNotFound
 	}
-	sessionPoolMutex.Unlock()
+
+	rp.Close()
+	delete(p.pool, slot)
 
 	return nil
 }

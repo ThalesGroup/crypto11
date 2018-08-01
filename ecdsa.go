@@ -203,7 +203,7 @@ func exportECDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle)
 		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_EC_POINT, nil),
 	}
-	if attributes, err = libHandle.GetAttributeValue(session.Handle, pubHandle, template); err != nil {
+	if attributes, err = session.Ctx.GetAttributeValue(session.Handle, pubHandle, template); err != nil {
 		return nil, err
 	}
 	if pub.Curve, err = unmarshalEcParams(attributes[0].Value); err != nil {
@@ -234,7 +234,7 @@ func GenerateECDSAKeyPair(c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 func GenerateECDSAKeyPairOnSlot(slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	var k *PKCS11PrivateKeyECDSA
 	var err error
-	if err = setupSessions(slot); err != nil {
+	if err = ensureSessions(libHandle, slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {
@@ -255,9 +255,6 @@ func GenerateECDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte,
 	var parameters []byte
 	var pub crypto.PublicKey
 
-	if libHandle == nil {
-		return nil, ErrNotConfigured
-	}
 	if label == nil {
 		if label, err = generateKeyLabel(); err != nil {
 			return nil, err
@@ -289,7 +286,7 @@ func GenerateECDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte,
 		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
 	}
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := libHandle.GenerateKeyPair(session.Handle,
+	pubHandle, privHandle, err := session.Ctx.GenerateKeyPair(session.Handle,
 		mech,
 		publicKeyTemplate,
 		privateKeyTemplate)

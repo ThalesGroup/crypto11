@@ -134,7 +134,6 @@ type PKCS11PrivateKey struct {
 
 /* Nasty globals */
 var libHandle *pkcs11.Ctx
-var session *PKCS11Session
 var defaultSlot uint
 var maxSessions int
 
@@ -237,7 +236,7 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)", maxSessions, token.MaxRwSessionCount)
 	}
 
-	if err = setupSessions(defaultSlot); err != nil {
+	if err = setupSessions(libHandle, defaultSlot); err != nil {
 		return nil, err
 	}
 	if err = withSession(defaultSlot, func(session *PKCS11Session) error {
@@ -280,6 +279,37 @@ func ConfigureFromFile(configLocation string) (*pkcs11.Ctx, error) {
 		return nil, err
 	}
 	return Configure(config)
+}
+
+// Close releases all sessions and uninitializes library default handle.
+// Once library handle is released, library may be configured once again.
+func Close() error {
+	ctx := libHandle
+	if ctx != nil {
+		slots, err := ctx.GetSlotList(true)
+		if err != nil {
+			return err
+		}
+
+		for _, slot := range slots {
+			if err := pool.closeSessions(slot); err != nil && err != errPoolNotFound {
+				return err
+			}
+			// if something by passed cache
+			if err := ctx.CloseAllSessions(slot); err != nil {
+				return err
+			}
+		}
+
+		if err := ctx.Finalize(); err != nil {
+			return err
+		}
+
+		ctx.Destroy()
+		libHandle = nil
+	}
+
+	return nil
 }
 
 func init() {
