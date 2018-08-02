@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/cipher"
-	"crypto/rand"
 	"github.com/miekg/pkcs11"
 	"testing"
 )
@@ -41,7 +40,7 @@ func TestHardSymmetric(t *testing.T) {
 
 func testHardSymmetric(t *testing.T, keytype int, bits int) {
 	var err error
-	var key *PKCS11SecretKey
+	var key, key2 *PKCS11SecretKey
 	var id []byte
 	t.Run("Generate", func(t *testing.T) {
 		if key, err = GenerateSecretKey(bits, Ciphers[keytype]); err != nil {
@@ -57,23 +56,36 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 			return
 		}
 	})
-	var key2 crypto.PrivateKey
+	var key2gen crypto.PrivateKey
 	t.Run("Find", func(t *testing.T) {
-		if key2, err = FindKey(id, nil); err != nil {
+		if key2gen, err = FindKey(id, nil); err != nil {
 			t.Errorf("crypto11.FindKey by id: %v", err)
 			return
 		}
+		key2 = key2gen.(*PKCS11SecretKey)
 	})
-	t.Run("Block", func(t *testing.T) { testSymmetricBlock(t, key, key2.(*PKCS11SecretKey)) })
+	t.Run("Block", func(t *testing.T) { testSymmetricBlock(t, key, key2) })
 	iv := make([]byte, key.BlockSize())
-	if _, err = rand.Read(iv); err != nil {
-		t.Errorf("rand.Read: %v", err)
-		return
+	for i := 0; i < len(iv); i++ {
+		iv[i] = 0xF0
 	}
 	t.Run("CBC", func(t *testing.T) {
-		testSymmetricMode(t, cipher.NewCBCEncrypter(key2.(*PKCS11SecretKey), iv), cipher.NewCBCDecrypter(key2.(*PKCS11SecretKey), iv))
+		testSymmetricMode(t, cipher.NewCBCEncrypter(key2, iv), cipher.NewCBCDecrypter(key2, iv))
 	})
-	// TODO perf test native CBC vs idiomatic PKCS#11 CBC
+	t.Run("CBCClose", func(t *testing.T) {
+		var enc, dec BlockModeCloser
+		if enc, err = key2.NewCBCEncrypter(iv); err != nil {
+			t.Errorf("NewCBCEncrypter: %v", err)
+			return
+		}
+		if dec, err = key2.NewCBCDecrypter(iv); err != nil {
+			t.Errorf("NewCBCDecrypter: %v", err)
+			return
+		}
+		testSymmetricMode(t, enc, dec)
+		enc.Close()
+		dec.Close()
+	})
 	// TODO CFB
 	// TODO OFB
 	// TODO CTR
@@ -165,4 +177,35 @@ func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.Bl
 		t.Errorf("BlockMode.Decrypt: plaintext wrong")
 		return
 	}
+}
+
+func BenchmarkCBC(b *testing.B) {
+	ConfigureFromFile("config")
+	var err error
+	var key *PKCS11SecretKey
+	if key, err = GenerateSecretKey(128, Ciphers[pkcs11.CKK_AES]); err != nil {
+		b.Errorf("crypto11.GenerateSecretKey: %v", err)
+		return
+	}
+	iv := make([]byte, 16)
+	plaintext := make([]byte, 65536)
+	ciphertext := make([]byte, 65536)
+	b.Run("Native", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			mode := cipher.NewCBCEncrypter(key, iv)
+			mode.CryptBlocks(ciphertext, plaintext)
+		}
+	})
+	b.Run("Idiomatic", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			mode, err := key.NewCBCEncrypter(iv)
+			if err != nil {
+				panic(err)
+			}
+			mode.CryptBlocks(ciphertext, plaintext)
+			mode.Close()
+		}
+
+	})
+	Close()
 }
