@@ -86,10 +86,19 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 		enc.Close()
 		dec.Close()
 	})
+	if bits == 128 {
+		t.Run("GCM", func(t *testing.T) {
+			aead, err := cipher.NewGCM(key2)
+			if err != nil {
+				t.Errorf("cipher.NewGCM: %v", err)
+				return
+			}
+			testAEADMode(t, aead)
+		})
+	}
 	// TODO CFB
 	// TODO OFB
 	// TODO CTR
-	// TODO GCM
 }
 
 func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher.Block) {
@@ -175,6 +184,28 @@ func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.Bl
 	decrypt.CryptBlocks(output, middle)
 	if bytes.Compare(input, output) != 0 {
 		t.Errorf("BlockMode.Decrypt: plaintext wrong")
+		return
+	}
+}
+
+func testAEADMode(t *testing.T, aead cipher.AEAD) {
+	nonce := make([]byte, aead.NonceSize())
+	plaintext := make([]byte, 127)
+	for i := 0; i < len(plaintext); i++ {
+		plaintext[i] = byte(i)
+	}
+	additionalData := make([]byte, 129)
+	for i := 0; i < len(additionalData); i++ {
+		additionalData[i] = byte(i + 16)
+	}
+	ciphertext := aead.Seal([]byte{}, nonce, plaintext, additionalData)
+	decrypted, err := aead.Open([]byte{}, nonce, ciphertext, additionalData)
+	if err != nil {
+		t.Errorf("aead.Open: %s", err)
+		return
+	}
+	if bytes.Compare(plaintext, decrypted) != 0 {
+		t.Errorf("aead.Open: mismatch")
 		return
 	}
 }
