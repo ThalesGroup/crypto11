@@ -51,6 +51,9 @@ type SymmetricCipher struct {
 
 	// CBC mechanism (CKM_..._CBC)
 	CBCMech uint
+
+	// GCM mechanism (CKM_..._GCM)
+	GCMMech uint
 }
 
 // CipherAES describes the AES cipher. Use this with the
@@ -63,6 +66,7 @@ var CipherAES = SymmetricCipher{
 	MAC:       false,
 	ECBMech:   pkcs11.CKM_AES_ECB,
 	CBCMech:   pkcs11.CKM_AES_CBC,
+	GCMMech:   pkcs11.CKM_AES_GCM,
 }
 
 // CipherDES3 describes the three-key triple-DES cipher. Use this with the
@@ -75,6 +79,7 @@ var CipherDES3 = SymmetricCipher{
 	MAC:       false,
 	ECBMech:   pkcs11.CKM_DES3_ECB,
 	CBCMech:   pkcs11.CKM_DES3_CBC,
+	GCMMech:   0,
 }
 
 // Ciphers is a map of PKCS#11 key types (CKK_...) to symmetric cipher information.
@@ -214,6 +219,74 @@ func (key *PKCS11SecretKey) Encrypt(dst, src []byte) {
 	} else {
 		copy(dst[:key.Cipher.BlockSize], result)
 	}
+}
+
+// cipher.AEAD ----------------------------------------------------------
+
+type gcmAead struct {
+	key *PKCS11SecretKey
+}
+
+// NewGCM returns a given cipher wrapped in Galois Counter Mode, with the standard
+// nonce length.
+//
+// This depends on the HSM supporting the CKM_*_GCM mechanism. If it is not supported
+// then you must use cipher.NewGCM; it will be slow.
+func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
+	if key.Cipher.GCMMech == 0 {
+		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.KeyType)
+		return
+	}
+	g = gcmAead{key}
+	return
+}
+
+func (g gcmAead) NonceSize() int {
+	return 12
+}
+
+func (g gcmAead) Overhead() int {
+	return 16
+}
+
+func (g gcmAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+	var result []byte
+	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
+		params := pkcs11.NewGCMParams(nonce, additionalData, 16)
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(g.key.Cipher.GCMMech, params)}
+		if err = session.Ctx.EncryptInit(session.Handle, mech, g.key.Handle); err != nil {
+			return
+		}
+		if result, err = session.Ctx.Encrypt(session.Handle, plaintext); err != nil {
+			return
+		}
+		return
+	}); err != nil {
+		panic(err)
+	} else {
+		dst = append(dst, result...)
+	}
+	return dst
+}
+
+func (g gcmAead) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
+	var result []byte
+	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
+		params := pkcs11.NewGCMParams(nonce, additionalData, 16)
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(g.key.Cipher.GCMMech, params)}
+		if err = session.Ctx.DecryptInit(session.Handle, mech, g.key.Handle); err != nil {
+			return
+		}
+		if result, err = session.Ctx.Decrypt(session.Handle, ciphertext); err != nil {
+			return
+		}
+		return
+	}); err != nil {
+		return nil, err
+	} else {
+		dst = append(dst, result...)
+	}
+	return dst, nil
 }
 
 // Stream encryption/decryption -----------------------------------------

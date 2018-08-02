@@ -87,7 +87,7 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 		dec.Close()
 	})
 	if bits == 128 {
-		t.Run("GCM", func(t *testing.T) {
+		t.Run("GCMSoft", func(t *testing.T) {
 			aead, err := cipher.NewGCM(key2)
 			if err != nil {
 				t.Errorf("cipher.NewGCM: %v", err)
@@ -95,6 +95,23 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 			}
 			testAEADMode(t, aead)
 		})
+		t.Run("GCMHard", func(t *testing.T) {
+			var info pkcs11.Info
+			if info, err = instance.ctx.GetInfo(); err != nil {
+				t.Errorf("GetInfo: %v", err)
+				return
+			}
+			if info.ManufacturerID == "nCipher Corp. Ltd" {
+				t.Skipf("nShield PKCS#11 does not have GCM yet")
+			}
+			aead, err := key2.NewGCM()
+			if err != nil {
+				t.Errorf("key2.NewGCM: %v", err)
+				return
+			}
+			testAEADMode(t, aead)
+		})
+		// TODO check that hard/soft is consistent!
 	}
 	// TODO CFB
 	// TODO OFB
@@ -240,3 +257,5 @@ func BenchmarkCBC(b *testing.B) {
 	})
 	Close()
 }
+
+// TODO BenchmarkGCM along the same lines as above

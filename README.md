@@ -90,6 +90,8 @@ To protect keys with the module only, use the 'accelerator' token:
       "Pin" : "password"
     }
 
+(At time of writing) GCM is not implemented, so expect test skips.
+
 Testing with SoftHSM
 --------------------
 
