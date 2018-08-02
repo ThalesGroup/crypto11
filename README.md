@@ -14,6 +14,7 @@ uses [PKCS#11](http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/p
 * ECDSA signing.
 * DSA signing.
 * Random number generation.
+* (Experimental) AES and DES3 encryption and decryption.
 
 Signing is done through the
 [crypto.Signer](https://golang.org/pkg/crypto/#Signer) interface and
