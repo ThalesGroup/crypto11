@@ -150,7 +150,7 @@ The configuration looks like this:
       "Pin" : "password"
     }
 
-(At time of writing) OAEP is only partial, so expect test skips.
+(At time of writing) OAEP is only partial and HMAC is unsupported, so expect test skips.
 
 Limitations
 ===========

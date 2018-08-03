@@ -29,13 +29,20 @@ import (
 	"github.com/youtube/vitess/go/pools"
 )
 
-// SymmetricCipher represents information about a symmetric cipher.
-type SymmetricCipher struct {
+// SymmetricGenParams holds a consistent (key type, mechanism) key generation pair.
+type SymmetricGenParams struct {
 	// Key type (CKK_...)
 	KeyType uint
 
 	// Key generation mechanism (CKM_..._KEY_GEN)
 	GenMech uint
+}
+
+// SymmetricCipher represents information about a symmetric cipher.
+type SymmetricCipher struct {
+	// Possible key generation parameters
+	// (For HMAC this varies between PKCS#11 implementations.)
+	GenParams []SymmetricGenParams
 
 	// Block size in bytes
 	BlockSize int
@@ -59,8 +66,12 @@ type SymmetricCipher struct {
 // CipherAES describes the AES cipher. Use this with the
 // GenerateSecretKey... functions.
 var CipherAES = SymmetricCipher{
-	KeyType:   pkcs11.CKK_AES,
-	GenMech:   pkcs11.CKM_AES_KEY_GEN,
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_AES,
+			GenMech: pkcs11.CKM_AES_KEY_GEN,
+		},
+	},
 	BlockSize: 16,
 	Encrypt:   true,
 	MAC:       false,
@@ -72,8 +83,12 @@ var CipherAES = SymmetricCipher{
 // CipherDES3 describes the three-key triple-DES cipher. Use this with the
 // GenerateSecretKey... functions.
 var CipherDES3 = SymmetricCipher{
-	KeyType:   pkcs11.CKK_DES3,
-	GenMech:   pkcs11.CKM_DES3_KEY_GEN,
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_DES3,
+			GenMech: pkcs11.CKM_DES3_KEY_GEN,
+		},
+	},
 	BlockSize: 8,
 	Encrypt:   true,
 	MAC:       false,
@@ -82,10 +97,142 @@ var CipherDES3 = SymmetricCipher{
 	GCMMech:   0,
 }
 
+// CipherGeneric describes the CKK_GENERIC_SECRET key type. Use this with the
+// GenerateSecretKey... functions.
+//
+// The spec promises that this mechanism can be used to perform HMAC
+// operations, although implementations vary;
+// CipherHMACSHA1 and so on may give better results.
+var CipherGeneric = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 64,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
+// CipherHMACSHA1 describes the CKK_SHA_1_HMAC key type. Use this with the
+// GenerateSecretKey... functions.
+var CipherHMACSHA1 = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_SHA_1_HMAC,
+			GenMech: CKM_NC_SHA_1_HMAC_KEY_GEN,
+		},
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 64,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
+// CipherHMACSHA224 describes the CKK_SHA224_HMAC key type. Use this with the
+// GenerateSecretKey... functions.
+var CipherHMACSHA224 = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_SHA224_HMAC,
+			GenMech: CKM_NC_SHA224_HMAC_KEY_GEN,
+		},
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 64,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
+// CipherHMACSHA256 describes the CKK_SHA256_HMAC key type. Use this with the
+// GenerateSecretKey... functions.
+var CipherHMACSHA256 = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_SHA256_HMAC,
+			GenMech: CKM_NC_SHA256_HMAC_KEY_GEN,
+		},
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 64,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
+// CipherHMACSHA384 describes the CKK_SHA384_HMAC key type. Use this with the
+// GenerateSecretKey... functions.
+var CipherHMACSHA384 = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_SHA384_HMAC,
+			GenMech: CKM_NC_SHA384_HMAC_KEY_GEN,
+		},
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 64,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
+// CipherHMACSHA512 describes the CKK_SHA512_HMAC key type. Use this with the
+// GenerateSecretKey... functions.
+var CipherHMACSHA512 = SymmetricCipher{
+	GenParams: []SymmetricGenParams{
+		{
+			KeyType: pkcs11.CKK_SHA512_HMAC,
+			GenMech: CKM_NC_SHA512_HMAC_KEY_GEN,
+		},
+		{
+			KeyType: pkcs11.CKK_GENERIC_SECRET,
+			GenMech: pkcs11.CKM_GENERIC_SECRET_KEY_GEN,
+		},
+	},
+	BlockSize: 128,
+	Encrypt:   false,
+	MAC:       true,
+	ECBMech:   0,
+	CBCMech:   0,
+	GCMMech:   0,
+}
+
 // Ciphers is a map of PKCS#11 key types (CKK_...) to symmetric cipher information.
 var Ciphers = map[int]*SymmetricCipher{
-	pkcs11.CKK_AES:  &CipherAES,
-	pkcs11.CKK_DES3: &CipherDES3,
+	pkcs11.CKK_AES:            &CipherAES,
+	pkcs11.CKK_DES3:           &CipherDES3,
+	pkcs11.CKK_GENERIC_SECRET: &CipherGeneric,
+	pkcs11.CKK_SHA_1_HMAC:     &CipherHMACSHA1,
+	pkcs11.CKK_SHA224_HMAC:    &CipherHMACSHA224,
+	pkcs11.CKK_SHA256_HMAC:    &CipherHMACSHA256,
+	pkcs11.CKK_SHA384_HMAC:    &CipherHMACSHA384,
+	pkcs11.CKK_SHA512_HMAC:    &CipherHMACSHA512,
 }
 
 // PKCS11SecretKey contains a reference to a loaded PKCS#11 symmetric key object.
@@ -140,27 +287,42 @@ func GenerateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, la
 			return nil, err
 		}
 	}
-	secretKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, cipher.KeyType),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
-		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
-		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt),
-		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
-
-		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+	var privHandle pkcs11.ObjectHandle
+	// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
+	// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
+	// vendor-specific mechanisms.
+	for _, genMech := range cipher.GenParams {
+		secretKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt),
+			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+			pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
+			pkcs11.NewAttribute(pkcs11.CKA_ID, id),
+		}
+		if bits > 0 {
+			secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
+		}
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
+		privHandle, err = session.Ctx.GenerateKey(session.Handle, mech, secretKeyTemplate)
+		if err == nil {
+			break
+		}
+		// nShield returns this if if doesn't like the CKK/CKM combination.
+		if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_TEMPLATE_INCONSISTENT {
+			continue
+		}
+		if err != nil {
+			return
+		}
 	}
-	if bits > 0 {
-		secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
-	}
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(cipher.GenMech, nil)}
-	privHandle, err := session.Ctx.GenerateKey(session.Handle, mech, secretKeyTemplate)
 	if err != nil {
-		return nil, err
+		return
 	}
 	key = &PKCS11SecretKey{PKCS11Object{privHandle, slot}, cipher}
 	return
@@ -234,7 +396,7 @@ type gcmAead struct {
 // then you must use cipher.NewGCM; it will be slow.
 func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
 	if key.Cipher.GCMMech == 0 {
-		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.KeyType)
+		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.GenParams[0].KeyType)
 		return
 	}
 	g = gcmAead{key}
