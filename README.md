@@ -145,7 +145,7 @@ The configuration looks like this:
       "Pin" : "password"
     }
 
-(At time of writing) PSS and OAEP aren't supported so expect test failures.
+(At time of writing) OAEP is only partial, so expect test skips.
 
 Limitations
 ===========
