@@ -518,9 +518,8 @@ func (g genericAead) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte
 		return
 	}); err != nil {
 		return nil, err
-	} else {
-		dst = append(dst, result...)
 	}
+	dst = append(dst, result...)
 	return dst, nil
 }
 

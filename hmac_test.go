@@ -54,7 +54,6 @@ func TestHmac(t *testing.T) {
 func testHmac(t *testing.T, keytype int, mech int, length int, xlength int) {
 	var err error
 	var key *PKCS11SecretKey
-	var id []byte
 	t.Run("Generate", func(t *testing.T) {
 		if key, err = GenerateSecretKey(256, Ciphers[keytype]); err != nil {
 			t.Errorf("crypto11.GenerateSecretKey: %v", err)
@@ -62,10 +61,6 @@ func testHmac(t *testing.T, keytype int, mech int, length int, xlength int) {
 		}
 		if key == nil {
 			t.Errorf("crypto11.GenerateSecretKey: returned nil but no error")
-			return
-		}
-		if id, _, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.PKCS11SecretKey.Identify: %v", err)
 			return
 		}
 	})
