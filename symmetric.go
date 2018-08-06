@@ -24,10 +24,19 @@ package crypto11
 import (
 	"context"
 	"crypto/cipher"
+	"errors"
 	"fmt"
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
 	"runtime"
+)
+
+const (
+	// PaddingNone represents a block cipher with no padding.
+	PaddingNone = iota
+
+	// PaddingPKCS represents a block cipher used with PKCS#7 padding.
+	PaddingPKCS
 )
 
 // SymmetricGenParams holds a consistent (key type, mechanism) key generation pair.
@@ -60,6 +69,9 @@ type SymmetricCipher struct {
 	// CBC mechanism (CKM_..._CBC)
 	CBCMech uint
 
+	// CBC mechanism with PKCS#7 padding (CKM_..._CBC)
+	CBCPKCSMech uint
+
 	// GCM mechanism (CKM_..._GCM)
 	GCMMech uint
 }
@@ -73,12 +85,13 @@ var CipherAES = SymmetricCipher{
 			GenMech: pkcs11.CKM_AES_KEY_GEN,
 		},
 	},
-	BlockSize: 16,
-	Encrypt:   true,
-	MAC:       false,
-	ECBMech:   pkcs11.CKM_AES_ECB,
-	CBCMech:   pkcs11.CKM_AES_CBC,
-	GCMMech:   pkcs11.CKM_AES_GCM,
+	BlockSize:   16,
+	Encrypt:     true,
+	MAC:         false,
+	ECBMech:     pkcs11.CKM_AES_ECB,
+	CBCMech:     pkcs11.CKM_AES_CBC,
+	CBCPKCSMech: pkcs11.CKM_AES_CBC_PAD,
+	GCMMech:     pkcs11.CKM_AES_GCM,
 }
 
 // CipherDES3 describes the three-key triple-DES cipher. Use this with the
@@ -90,12 +103,13 @@ var CipherDES3 = SymmetricCipher{
 			GenMech: pkcs11.CKM_DES3_KEY_GEN,
 		},
 	},
-	BlockSize: 8,
-	Encrypt:   true,
-	MAC:       false,
-	ECBMech:   pkcs11.CKM_DES3_ECB,
-	CBCMech:   pkcs11.CKM_DES3_CBC,
-	GCMMech:   0,
+	BlockSize:   8,
+	Encrypt:     true,
+	MAC:         false,
+	ECBMech:     pkcs11.CKM_DES3_ECB,
+	CBCMech:     pkcs11.CKM_DES3_CBC,
+	CBCPKCSMech: pkcs11.CKM_DES3_CBC_PAD,
+	GCMMech:     0,
 }
 
 // CipherGeneric describes the CKK_GENERIC_SECRET key type. Use this with the
@@ -386,8 +400,14 @@ func (key *PKCS11SecretKey) Encrypt(dst, src []byte) {
 
 // cipher.AEAD ----------------------------------------------------------
 
-type gcmAead struct {
+type genericAead struct {
 	key *PKCS11SecretKey
+
+	overhead int
+
+	nonceSize int
+
+	makeMech func(nonce []byte, additionalData []byte) ([]*pkcs11.Mechanism, error)
 }
 
 // NewGCM returns a given cipher wrapped in Galois Counter Mode, with the standard
@@ -400,27 +420,75 @@ func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
 		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.GenParams[0].KeyType)
 		return
 	}
-	g = gcmAead{key}
+	g = genericAead{
+		key:       key,
+		overhead:  16,
+		nonceSize: 12,
+		makeMech: func(nonce []byte, additionalData []byte) (mech []*pkcs11.Mechanism, error error) {
+			params := pkcs11.NewGCMParams(nonce, additionalData, 16)
+			mech = []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.GCMMech, params)}
+			return
+		},
+	}
 	return
 }
 
-func (g gcmAead) NonceSize() int {
-	return 12
+// NewCBC returns a given cipher wrapped in CBC mode.
+//
+// Despite the cipher.AEAD return type, there is no support for additional data and no authentication.
+// This method exists to provide a convenient way to do bulk (possibly padded) CBC encryption.
+// Think carefully before passing the cipher.AEAD to any consumer that expects authentication.
+func (key *PKCS11SecretKey) NewCBC(paddingMode int) (g cipher.AEAD, err error) {
+	g = genericAead{
+		key:       key,
+		overhead:  0,
+		nonceSize: key.BlockSize(),
+		makeMech: func(nonce []byte, additionalData []byte) (mech []*pkcs11.Mechanism, error error) {
+			if len(additionalData) > 0 {
+				err = errors.New("additional data not supported for CBC mode")
+			}
+			var pkcsMech uint
+			switch paddingMode {
+			case PaddingNone:
+				pkcsMech = key.Cipher.CBCMech
+			case PaddingPKCS:
+				pkcsMech = key.Cipher.CBCPKCSMech
+			default:
+				err = errors.New("unrecognized padding mode")
+				return
+			}
+			if pkcsMech == 0 {
+				err = errors.New("unsupported padding mode")
+				return
+			}
+			mech = []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcsMech, nonce)}
+			return
+		},
+	}
+	return
 }
 
-func (g gcmAead) Overhead() int {
-	return 16
+func (g genericAead) NonceSize() int {
+	return g.nonceSize
 }
 
-func (g gcmAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+func (g genericAead) Overhead() int {
+	return g.overhead
+}
+
+func (g genericAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 	var result []byte
 	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
-		params := pkcs11.NewGCMParams(nonce, additionalData, 16)
-		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(g.key.Cipher.GCMMech, params)}
+		var mech []*pkcs11.Mechanism
+		if mech, err = g.makeMech(nonce, additionalData); err != nil {
+			return
+		}
 		if err = session.Ctx.EncryptInit(session.Handle, mech, g.key.Handle); err != nil {
+			err = fmt.Errorf("C_EncryptInit: %v", err)
 			return
 		}
 		if result, err = session.Ctx.Encrypt(session.Handle, plaintext); err != nil {
+			err = fmt.Errorf("C_Encrypt: %v", err)
 			return
 		}
 		return
@@ -432,15 +500,19 @@ func (g gcmAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 	return dst
 }
 
-func (g gcmAead) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
+func (g genericAead) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
 	var result []byte
 	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
-		params := pkcs11.NewGCMParams(nonce, additionalData, 16)
-		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(g.key.Cipher.GCMMech, params)}
+		var mech []*pkcs11.Mechanism
+		if mech, err = g.makeMech(nonce, additionalData); err != nil {
+			return
+		}
 		if err = session.Ctx.DecryptInit(session.Handle, mech, g.key.Handle); err != nil {
+			err = fmt.Errorf("C_DecryptInit: %v", err)
 			return
 		}
 		if result, err = session.Ctx.Decrypt(session.Handle, ciphertext); err != nil {
+			err = fmt.Errorf("C_Decrypt: %v", err)
 			return
 		}
 		return

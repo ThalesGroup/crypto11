@@ -102,6 +102,22 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 		// See discussion at BlockModeCloser.
 		runtime.GC()
 	})
+	t.Run("CBCSealOpen", func(t *testing.T) {
+		aead, err := key2.NewCBC(PaddingNone)
+		if err != nil {
+			t.Errorf("cipher.NewCBC: %v", err)
+			return
+		}
+		testAEADMode(t, aead, 128, 0)
+	})
+	t.Run("CBCPKCSSealOpen", func(t *testing.T) {
+		aead, err := key2.NewCBC(PaddingPKCS)
+		if err != nil {
+			t.Errorf("cipher.NewCBC: %v", err)
+			return
+		}
+		testAEADMode(t, aead, 127, 0)
+	})
 	if bits == 128 {
 		t.Run("GCMSoft", func(t *testing.T) {
 			aead, err := cipher.NewGCM(key2)
@@ -109,7 +125,7 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 				t.Errorf("cipher.NewGCM: %v", err)
 				return
 			}
-			testAEADMode(t, aead)
+			testAEADMode(t, aead, 127, 129)
 		})
 		t.Run("GCMHard", func(t *testing.T) {
 			var info pkcs11.Info
@@ -125,7 +141,7 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 				t.Errorf("key2.NewGCM: %v", err)
 				return
 			}
-			testAEADMode(t, aead)
+			testAEADMode(t, aead, 127, 129)
 		})
 		// TODO check that hard/soft is consistent!
 	}
@@ -222,13 +238,13 @@ func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.Bl
 	}
 }
 
-func testAEADMode(t *testing.T, aead cipher.AEAD) {
+func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 	nonce := make([]byte, aead.NonceSize())
-	plaintext := make([]byte, 127)
+	plaintext := make([]byte, ptlen)
 	for i := 0; i < len(plaintext); i++ {
 		plaintext[i] = byte(i)
 	}
-	additionalData := make([]byte, 129)
+	additionalData := make([]byte, adlen)
 	for i := 0; i < len(additionalData); i++ {
 		additionalData[i] = byte(i + 16)
 	}
