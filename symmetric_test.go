@@ -26,6 +26,7 @@ import (
 	"crypto"
 	"crypto/cipher"
 	"github.com/miekg/pkcs11"
+	"runtime"
 	"testing"
 )
 
@@ -74,6 +75,20 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 	})
 	t.Run("CBCClose", func(t *testing.T) {
 		var enc, dec BlockModeCloser
+		if enc, err = key2.NewCBCEncrypterCloser(iv); err != nil {
+			t.Errorf("NewCBCEncrypter: %v", err)
+			return
+		}
+		if dec, err = key2.NewCBCDecrypterCloser(iv); err != nil {
+			t.Errorf("NewCBCDecrypter: %v", err)
+			return
+		}
+		testSymmetricMode(t, enc, dec)
+		enc.Close()
+		dec.Close()
+	})
+	t.Run("CBCNoClose", func(t *testing.T) {
+		var enc, dec cipher.BlockMode
 		if enc, err = key2.NewCBCEncrypter(iv); err != nil {
 			t.Errorf("NewCBCEncrypter: %v", err)
 			return
@@ -83,8 +98,9 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 			return
 		}
 		testSymmetricMode(t, enc, dec)
-		enc.Close()
-		dec.Close()
+
+		// See discussion at BlockModeCloser.
+		runtime.GC()
 	})
 	if bits == 128 {
 		t.Run("GCMSoft", func(t *testing.T) {
@@ -116,6 +132,7 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 	// TODO CFB
 	// TODO OFB
 	// TODO CTR
+
 }
 
 func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher.Block) {
@@ -244,6 +261,16 @@ func BenchmarkCBC(b *testing.B) {
 			mode.CryptBlocks(ciphertext, plaintext)
 		}
 	})
+	b.Run("IdiomaticClose", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			mode, err := key.NewCBCEncrypterCloser(iv)
+			if err != nil {
+				panic(err)
+			}
+			mode.CryptBlocks(ciphertext, plaintext)
+			mode.Close()
+		}
+	})
 	b.Run("Idiomatic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			mode, err := key.NewCBCEncrypter(iv)
@@ -251,9 +278,8 @@ func BenchmarkCBC(b *testing.B) {
 				panic(err)
 			}
 			mode.CryptBlocks(ciphertext, plaintext)
-			mode.Close()
 		}
-
+		runtime.GC()
 	})
 	Close()
 }
