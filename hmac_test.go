@@ -98,6 +98,15 @@ func testHmac(t *testing.T, keytype int, mech int, length int, xlength int, full
 		}
 	})
 	if full { // Independent of hash, only do these once
+		t.Run("Empty", func(t *testing.T) {
+			// Must be able to MAC empty inputs without panicing
+			var h1 hash.Hash
+			if h1, err = key.NewHMAC(mech, length); err != nil {
+				t.Errorf("key.NewHMAC: %v", err)
+				return
+			}
+			h1.Sum([]byte{})
+		})
 		t.Run("MultiSum", func(t *testing.T) {
 			input := []byte("a different short string")
 			var h1 hash.Hash
@@ -157,6 +166,20 @@ func testHmac(t *testing.T, keytype int, mech int, length int, xlength int, full
 				t.Errorf("r1/r2 unexpectedly equal")
 				return
 			}
+		})
+		t.Run("ResetFast", func(t *testing.T) {
+			// Reset() immediately after creation should be safe
+			var h1 hash.Hash
+			if h1, err = key.NewHMAC(mech, length); err != nil {
+				t.Errorf("key.NewHMAC: %v", err)
+				return
+			}
+			h1.Reset()
+			if n, err := h1.Write([]byte{2}); err != nil || n != 1 {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			h1.Sum([]byte{})
 		})
 	}
 }
