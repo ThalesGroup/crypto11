@@ -15,6 +15,7 @@ uses [PKCS#11](http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/p
 * DSA signing.
 * Random number generation.
 * (Experimental) AES and DES3 encryption and decryption.
+* (Experimental) HMAC support.
 
 Signing is done through the
 [crypto.Signer](https://golang.org/pkg/crypto/#Signer) interface and
@@ -177,7 +178,7 @@ Copyright
 
 MIT License.
 
-Copyright 2016, 2017 Thales e-Security, Inc
+Copyright 2016-2018 Thales e-Security, Inc
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the

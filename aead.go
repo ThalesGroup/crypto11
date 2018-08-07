@@ -30,6 +30,14 @@ import (
 
 // cipher.AEAD ----------------------------------------------------------
 
+const (
+	// PaddingNone represents a block cipher with no padding. (See NewCBC.)
+	PaddingNone = iota
+
+	// PaddingPKCS represents a block cipher used with PKCS#7 padding. (See NewCBC.)
+	PaddingPKCS
+)
+
 type genericAead struct {
 	key *PKCS11SecretKey
 

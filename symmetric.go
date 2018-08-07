@@ -239,7 +239,10 @@ var Ciphers = map[int]*SymmetricCipher{
 // PKCS11SecretKey contains a reference to a loaded PKCS#11 symmetric key object.
 //
 // A *PKCS11SecretKey implements the cipher.Block interface, allowing it be used
-// as the argument to cipher.NewCBCDecrypter, etc.
+// as the argument to cipher.NewCBCEncrypter and similar methods.
+// For bulk operation this is very inefficient;
+// using NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC from this package is
+// much faster.
 type PKCS11SecretKey struct {
 	PKCS11Object
 

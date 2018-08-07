@@ -30,28 +30,14 @@ import (
 	"runtime"
 )
 
-const (
-	// PaddingNone represents a block cipher with no padding.
-	PaddingNone = iota
-
-	// PaddingPKCS represents a block cipher used with PKCS#7 padding.
-	PaddingPKCS
-)
-
 // cipher.BlockMode -----------------------------------------------------
 
-// BlockModeCloser represents a block cipher running in a block-based mode (CBC, ECB etc).
+// BlockModeCloser represents a block cipher running in a block-based mode (e.g. CBC).
 //
-// BlockModeCloser implements cipher.BlockMode, and can be used as such.
+// BlockModeCloser embeds cipher.BlockMode, and can be used as such.
 // However, in this case
 // (or if the Close() method is not explicitly called for any other reason),
-// resources allocated to it may remain live longer than necessary.
-//
-// The underlying implementations set a finalizer
-// so these resources will eventually be released,
-// but if your application has resource consumption problems or hangs
-// then adding an explicit Close() call may be the solution.
-// If that is not possible then adding calls to runtime.GC() may help.
+// resources allocated to it may remain live indefinitely.
 type BlockModeCloser interface {
 	cipher.BlockMode
 
@@ -69,6 +55,8 @@ const (
 //
 // The new BlockMode acquires persistent resources which are released (eventually) by a finalizer.
 // If this is a problem for your application then use NewCBCEncrypterCloser instead.
+//
+// If that is not possible then adding calls to runtime.GC() may help.
 func (key *PKCS11SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, true)
 }
@@ -78,18 +66,26 @@ func (key *PKCS11SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err
 //
 // The new BlockMode acquires persistent resources which are released (eventually) by a finalizer.
 // If this is a problem for your application then use NewCBCDecrypterCloser instead.
+//
+// If that is not possible then adding calls to runtime.GC() may help.
 func (key *PKCS11SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, true)
 }
 
 // NewCBCEncrypterCloser returns a  BlockModeCloser which encrypts in cipher block chaining mode, using the given key.
 // The length of iv must be the same as the key's block size.
+//
+// Use of NewCBCEncrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
+// of the returned BlockModeCloser.
 func (key *PKCS11SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, false)
 }
 
 // NewCBCDecrypterCloser returns a  BlockModeCloser which decrypts in cipher block chaining mode, using the given key.
 // The length of iv must be the same as the key's block size and must match the iv used to encrypt the data.
+//
+// Use of NewCBCDecrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
+// of the returned BlockModeCloser.
 func (key *PKCS11SecretKey) NewCBCDecrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, false)
 }

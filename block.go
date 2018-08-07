@@ -35,6 +35,10 @@ func (key *PKCS11SecretKey) BlockSize() int {
 
 // Decrypt decrypts the first block in src into dst.
 // Dst and src must overlap entirely or not at all.
+//
+// Using this method for bulk operation is very inefficient, as it makes a round trip to the HSM
+// (which may be network-connected) for each block.
+// For more efficient operation, see NewCBCDecrypterCloser, NewCBCDecrypter or NewCBC.
 func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
 	var result []byte
 	if err := withSession(key.Slot, func(session *PKCS11Session) (err error) {
@@ -59,6 +63,10 @@ func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
 
 // Encrypt encrypts the first block in src into dst.
 // Dst and src must overlap entirely or not at all.
+//
+// Using this method for bulk operation is very inefficient, as it makes a round trip to the HSM
+// (which may be network-connected) for each block.
+// For more efficient operation, see NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC.
 func (key *PKCS11SecretKey) Encrypt(dst, src []byte) {
 	var result []byte
 	if err := withSession(key.Slot, func(session *PKCS11Session) (err error) {
