@@ -183,6 +183,7 @@ func (bmc *blockModeCloser) CryptBlocks(dst, src []byte) {
 		panic("nontrivial result from *Final operation")
 	}
 	copy(dst[:len(result)], result)
+	runtime.KeepAlive(bmc)
 }
 
 func (bmc *blockModeCloser) Close() {
