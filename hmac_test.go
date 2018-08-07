@@ -40,18 +40,18 @@ func TestHmac(t *testing.T) {
 		t.Skipf("HMAC not implemented on SoftHSM")
 	}
 	t.Run("HMACSHA1", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20)
+		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20, false)
 	})
 	t.Run("HMACSHA1General", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10)
+		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10, true)
 	})
 	t.Run("HMACSHA256", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32)
+		testHmac(t, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
 	})
 	Close()
 }
 
-func testHmac(t *testing.T, keytype int, mech int, length int, xlength int) {
+func testHmac(t *testing.T, keytype int, mech int, length int, xlength int, full bool) {
 	var err error
 	var key *PKCS11SecretKey
 	t.Run("Generate", func(t *testing.T) {
@@ -97,4 +97,66 @@ func testHmac(t *testing.T, keytype int, mech int, length int, xlength int) {
 			return
 		}
 	})
+	if full { // Independent of hash, only do these once
+		t.Run("MultiSum", func(t *testing.T) {
+			input := []byte("a different short string")
+			var h1 hash.Hash
+			if h1, err = key.NewHMAC(mech, length); err != nil {
+				t.Errorf("key.NewHMAC: %v", err)
+				return
+			}
+			if n, err := h1.Write(input); err != nil || n != len(input) {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			r1 := h1.Sum([]byte{})
+			r2 := h1.Sum([]byte{})
+			if bytes.Compare(r1, r2) != 0 {
+				t.Errorf("r1/r2 inconsistent")
+				return
+			}
+			// Can't add more after Sum()
+			if n, err := h1.Write(input); err != ErrHmacClosed {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			// 0-length is special
+			if n, err := h1.Write([]byte{}); err != nil || n != 0 {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+		})
+		t.Run("Reset", func(t *testing.T) {
+			var h1 hash.Hash
+			if h1, err = key.NewHMAC(mech, length); err != nil {
+				t.Errorf("key.NewHMAC: %v", err)
+				return
+			}
+			if n, err := h1.Write([]byte{1}); err != nil || n != 1 {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			r1 := h1.Sum([]byte{})
+			h1.Reset()
+			if n, err := h1.Write([]byte{2}); err != nil || n != 1 {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			r2 := h1.Sum([]byte{})
+			h1.Reset()
+			if n, err := h1.Write([]byte{1}); err != nil || n != 1 {
+				t.Errorf("h1.Write: %v/%d", err, n)
+				return
+			}
+			r3 := h1.Sum([]byte{})
+			if bytes.Compare(r1, r3) != 0 {
+				t.Errorf("r1/r3 inconsistent")
+				return
+			}
+			if bytes.Compare(r1, r2) == 0 {
+				t.Errorf("r1/r2 unexpectedly equal")
+				return
+			}
+		})
+	}
 }

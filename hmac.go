@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
@@ -56,12 +57,23 @@ type hmacImplementation struct {
 	// PKCS#11 session to use
 	session *PKCS11Session
 
+	// Signing key
+	key *PKCS11SecretKey
+
+	// Hash size
 	size int
 
+	// Block size
 	blockSize int
+
+	// PKCS#11 mechanism information
+	mechDescription []*pkcs11.Mechanism
 
 	// Cleanup function
 	cleanup func()
+
+	// Result, or nil if we don't have the answer yet
+	result []byte
 }
 
 type hmacInfo struct {
@@ -91,6 +103,9 @@ var hmacInfos = map[int]*hmacInfo{
 	pkcs11.CKM_RIPEMD160_HMAC_GENERAL:  {20, 64, true},
 }
 
+// ErrHmacClosed is called if an HMAC is updated after it has finished.
+var ErrHmacClosed = errors.New("already called Sum()")
+
 // NewHMAC returns a new HMAC hash using the given PKCS#11 mechanism
 // and key.
 // length specifies the output size, for _GENERAL mechanisms.
@@ -99,31 +114,12 @@ var hmacInfos = map[int]*hmacInfo{
 // Size() function will return whatever length was, even if it is wrong.
 // BlockSize() will always return 0 in this case.
 //
-// The Reset() method is not implemented, and Sum() may only be called once.
-// The former limitation may be lifted in future but the latter is fundamental
-// and will not change.
+// The Reset() method is not implemented.
+// After Sum() is called no new data may be added.
 func (key *PKCS11SecretKey) NewHMAC(mech int, length int) (h hash.Hash, err error) {
-	// TODO refactor with newBlockModeCloser
-	sessionPool := pool.Get(key.Slot)
-	if sessionPool == nil {
-		err = fmt.Errorf("crypto11: no session for slot %d", key.Slot)
-		return
-	}
-	ctx := context.Background()
-	if instance.cfg.PoolWaitTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), instance.cfg.PoolWaitTimeout)
-		defer cancel()
-	}
-	var session pools.Resource
-	if session, err = sessionPool.Get(ctx); err != nil {
-		return
-	}
 	var hi hmacImplementation
-	hi.session = session.(*PKCS11Session)
-	hi.cleanup = func() {
-		sessionPool.Put(session)
-		hi.session = nil
+	hi = hmacImplementation{
+		key: key,
 	}
 	var params []byte
 	if info, ok := hmacInfos[mech]; ok {
@@ -137,16 +133,51 @@ func (key *PKCS11SecretKey) NewHMAC(mech int, length int) (h hash.Hash, err erro
 	} else {
 		hi.size = length
 	}
-	mechDescription := []*pkcs11.Mechanism{pkcs11.NewMechanism(uint(mech), params)}
-	if err = hi.session.Ctx.SignInit(hi.session.Handle, mechDescription, key.Handle); err != nil {
-		hi.cleanup()
+	hi.mechDescription = []*pkcs11.Mechanism{pkcs11.NewMechanism(uint(mech), params)}
+	if err = hi.initialize(); err != nil {
 		return
 	}
 	h = &hi
 	return
 }
 
+func (hi *hmacImplementation) initialize() (err error) {
+	// TODO refactor with newBlockModeCloser
+	sessionPool := pool.Get(hi.key.Slot)
+	if sessionPool == nil {
+		err = fmt.Errorf("crypto11: no session for slot %d", hi.key.Slot)
+		return
+	}
+	ctx := context.Background()
+	if instance.cfg.PoolWaitTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), instance.cfg.PoolWaitTimeout)
+		defer cancel()
+	}
+	var session pools.Resource
+	if session, err = sessionPool.Get(ctx); err != nil {
+		return
+	}
+	hi.session = session.(*PKCS11Session)
+	hi.cleanup = func() {
+		sessionPool.Put(session)
+		hi.session = nil
+	}
+	if err = hi.session.Ctx.SignInit(hi.session.Handle, hi.mechDescription, hi.key.Handle); err != nil {
+		hi.cleanup()
+		return
+	}
+	hi.result = nil
+	return
+}
+
 func (hi *hmacImplementation) Write(p []byte) (n int, err error) {
+	if hi.result != nil {
+		if len(p) > 0 {
+			err = ErrHmacClosed
+		}
+		return
+	}
 	if err = hi.session.Ctx.SignUpdate(hi.session.Handle, p); err != nil {
 		return
 	}
@@ -155,18 +186,20 @@ func (hi *hmacImplementation) Write(p []byte) (n int, err error) {
 }
 
 func (hi *hmacImplementation) Sum(b []byte) []byte {
-	var result []byte
-	var err error
-	result, err = hi.session.Ctx.SignFinal(hi.session.Handle)
-	hi.cleanup()
-	if err != nil {
-		panic(err)
+	if hi.result == nil {
+		var err error
+		hi.result, err = hi.session.Ctx.SignFinal(hi.session.Handle)
+		hi.cleanup()
+		if err != nil {
+			panic(err)
+		}
 	}
-	return append(b, result...)
+	return append(b, hi.result...)
 }
 
 func (hi *hmacImplementation) Reset() {
-	panic("Reset not implemented")
+	hi.Sum(nil) // Clean up
+	hi.initialize()
 }
 
 func (hi *hmacImplementation) Size() int {
