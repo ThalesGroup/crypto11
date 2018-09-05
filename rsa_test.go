@@ -240,7 +240,7 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 	needMechanism(t, slot, pkcs11.CKM_RSA_PKCS_OAEP)
 	// Doesn't seem to be a way to query supported MGFs so we do that the hard way.
 	var info pkcs11.Info
-	if info, err = libHandle.GetInfo(); err != nil {
+	if info, err = instance.ctx.GetInfo(); err != nil {
 		t.Errorf("GetInfo: %v", err)
 		return
 	}
@@ -275,7 +275,7 @@ func needMechanism(t *testing.T, slot uint, wantMech uint) {
 	if slot == ^uint(0) { // not using PKCS#11
 		return
 	}
-	if mechs, err = libHandle.GetMechanismList(slot); err != nil {
+	if mechs, err = instance.ctx.GetMechanismList(slot); err != nil {
 		t.Errorf("GetMechanismList: %v", err)
 		return
 	}

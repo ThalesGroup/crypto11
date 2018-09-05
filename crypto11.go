@@ -79,8 +79,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
-	pkcs11 "github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11"
 )
 
 const (
@@ -133,14 +134,26 @@ type PKCS11PrivateKey struct {
 // errors.
 
 /* Nasty globals */
-var libHandle *pkcs11.Ctx
-var defaultSlot uint
-var maxSessions int
+var instance = &libCtx{
+	cfg: &PKCS11Config{},
+	idleTimeout: idleTimeout,
+}
+
+// Represent library pkcs11 context and token configuration
+type libCtx struct {
+	ctx *pkcs11.Ctx
+	cfg *PKCS11Config
+
+	token *pkcs11.TokenInfo
+	slot  uint
+
+	idleTimeout time.Duration
+}
 
 // Find a token given its serial number
 func findToken(slots []uint, serial string, label string) (uint, *pkcs11.TokenInfo, error) {
 	for _, slot := range slots {
-		tokenInfo, err := libHandle.GetTokenInfo(slot)
+		tokenInfo, err := instance.ctx.GetTokenInfo(slot)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -195,65 +208,60 @@ type PKCS11Config struct {
 func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 	var err error
 	var slots []uint
-	var flags uint
 
 	if config == nil {
-		if libHandle != nil {
-			return libHandle, nil
+		if instance.ctx != nil {
+			return instance.ctx, nil
 		}
 		return nil, ErrNotConfigured
 	}
-	if libHandle != nil {
+	if instance.ctx != nil {
 		log.Printf("PKCS#11 library already configured")
-		return libHandle, nil
+		return instance.ctx, nil
 	}
-	libHandle = pkcs11.New(config.Path)
-	if libHandle == nil {
+	if config.MaxSessions == 0 {
+		config.MaxSessions = DefaultMaxSessions
+	}
+	instance.cfg = config
+	instance.ctx = pkcs11.New(config.Path)
+	if instance.ctx == nil {
 		log.Printf("Could not open PKCS#11 library: %s", config.Path)
 		return nil, ErrCannotOpenPKCS11
 	}
-	if err = libHandle.Initialize(); err != nil {
+	if err = instance.ctx.Initialize(); err != nil {
 		log.Printf("Failed to initialize PKCS#11 library: %s", err.Error())
 		return nil, err
 	}
-	if slots, err = libHandle.GetSlotList(true); err != nil {
+	if slots, err = instance.ctx.GetSlotList(true); err != nil {
 		log.Printf("Failed to list PKCS#11 Slots: %s", err.Error())
 		return nil, err
 	}
-	slot, token, err := findToken(slots, config.TokenSerial, config.TokenLabel)
+
+	instance.slot, instance.token, err = findToken(slots, config.TokenSerial, config.TokenLabel)
 	if err != nil {
 		log.Printf("Failed to find Token in any Slot: %s", err.Error())
 		return nil, err
 	}
-	defaultSlot = slot
-	flags = token.Flags
 
-	maxSessions = config.MaxSessions
-	if maxSessions == 0 {
-		maxSessions = DefaultMaxSessions
-	}
-	if token.MaxRwSessionCount > 0 && uint(maxSessions) > token.MaxRwSessionCount {
-		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)", maxSessions, token.MaxRwSessionCount)
+	if instance.token.MaxRwSessionCount > 0 && uint(instance.cfg.MaxSessions) > instance.token.MaxRwSessionCount {
+		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)", instance.cfg.MaxSessions, instance.token.MaxRwSessionCount)
 	}
 
-	if err = setupSessions(libHandle, defaultSlot); err != nil {
+	if err := setupSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	if err = withSession(defaultSlot, func(session *PKCS11Session) error {
-		if flags&pkcs11.CKF_LOGIN_REQUIRED != 0 {
-			err = libHandle.Login(session.Handle, pkcs11.CKU_USER, config.Pin)
-			if err != nil {
-				log.Printf("Failed to login into PKCS#11 Token: %s", err.Error())
-			}
-		} else {
-			err = nil
+
+	if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 {
+		if err = withSession(instance.slot, func(session *PKCS11Session) error {
+			// login is pkcs11 context wide, not just handle/session scoped
+			return session.Ctx.Login(session.Handle, pkcs11.CKU_USER, config.Pin)
+		}); err != nil {
+			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
+			return nil, err
 		}
-		return err
-	}); err != nil {
-		log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
-		return nil, err
 	}
-	return libHandle, nil
+
+	return instance.ctx, nil
 }
 
 // ConfigureFromFile configures PKCS#11 from a name configuration file.
@@ -284,7 +292,7 @@ func ConfigureFromFile(configLocation string) (*pkcs11.Ctx, error) {
 // Close releases all sessions and uninitializes library default handle.
 // Once library handle is released, library may be configured once again.
 func Close() error {
-	ctx := libHandle
+	ctx := instance.ctx
 	if ctx != nil {
 		slots, err := ctx.GetSlotList(true)
 		if err != nil {
@@ -306,7 +314,7 @@ func Close() error {
 		}
 
 		ctx.Destroy()
-		libHandle = nil
+		instance.ctx = nil
 	}
 
 	return nil

@@ -32,7 +32,9 @@ func TestClose(t *testing.T) {
 	// Verify that close and re-open works.
 	var err error
 	var key *PKCS11PrivateKeyDSA
-	ConfigureFromFile("config")
+	if _, err := ConfigureFromFile("config"); err != nil {
+		t.Fatal(err)
+	}
 	psize := dsa.L1024N160
 	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
 		t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
@@ -47,15 +49,21 @@ func TestClose(t *testing.T) {
 		t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
 		return
 	}
-	Close()
+	if err = Close(); err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < 5; i++ {
-		ConfigureFromFile("config")
+		if _, err := ConfigureFromFile("config"); err != nil {
+			t.Fatal(err)
+		}
 		var key2 crypto.PrivateKey
 		if key2, err = FindKeyPair(id, nil); err != nil {
 			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
 			return
 		}
 		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", i))
-		Close()
+		if err = Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

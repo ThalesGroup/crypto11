@@ -33,7 +33,7 @@ import (
 
 const newSessionTimeout = 15 * time.Second
 
-var idleTimeout = 30 * time.Second
+const idleTimeout = 30 * time.Second
 
 // PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
 type PKCS11Session struct {
@@ -113,11 +113,26 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 	}
 	defer sessionPool.Put(session)
 
-	return f(session.(*PKCS11Session))
+	s := session.(*PKCS11Session)
+	err = f(s)
+	if err != nil {
+		// if a request required login, then try to login
+		if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN && instance.cfg.Pin != "" {
+			if err = s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin); err != nil {
+				return err
+			}
+			// retry after login
+			return f(s)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 // Ensures that sessions are setup.
-func ensureSessions(ctx* pkcs11.Ctx, slot uint) error {
+func ensureSessions(ctx* libCtx, slot uint) error {
 	if err := setupSessions(ctx, slot); err != nil && err != errSlotBusy {
 		return err
 	}
@@ -126,14 +141,14 @@ func ensureSessions(ctx* pkcs11.Ctx, slot uint) error {
 
 // Create the session pool for a given slot if it does not exist
 // already.
-func setupSessions(ctx* pkcs11.Ctx, slot uint) error {
+func setupSessions(c *libCtx, slot uint) error {
 	return pool.PutIfAbsent(slot, pools.NewResourcePool(
 		func() (pools.Resource, error) {
-			return newSession(ctx, slot)
+			return newSession(c.ctx, slot)
 		},
-		maxSessions,
-		maxSessions,
-		idleTimeout,
+		c.cfg.MaxSessions,
+		c.cfg.MaxSessions,
+		c.idleTimeout,
 	))
 }
 

@@ -92,7 +92,7 @@ func exportRSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (
 // RSA private keys are generated with both sign and decrypt
 // permissions, and a public exponent of 65537.
 func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
-	return GenerateRSAKeyPairOnSlot(defaultSlot, nil, nil, bits)
+	return GenerateRSAKeyPairOnSlot(instance.slot, nil, nil, bits)
 }
 
 // GenerateRSAKeyPairOnSlot creates a RSA private key on a specified slot
@@ -101,7 +101,7 @@ func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
 func GenerateRSAKeyPairOnSlot(slot uint, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
 	var k *PKCS11PrivateKeyRSA
 	var err error
-	if err = ensureSessions(libHandle, slot); err != nil {
+	if err = ensureSessions(instance, slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {

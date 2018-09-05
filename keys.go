@@ -36,7 +36,7 @@ func (object *PKCS11Object) Identify() (id []byte, label []byte, err error) {
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
 	}
 	if err = withSession(object.Slot, func(session *PKCS11Session) error {
-		a, err = libHandle.GetAttributeValue(session.Handle, object.Handle, a)
+		a, err = instance.ctx.GetAttributeValue(session.Handle, object.Handle, a)
 		return err
 	}); err != nil {
 		return nil, nil, err
@@ -79,7 +79,7 @@ func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, key
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func FindKeyPair(id []byte, label []byte) (crypto.PrivateKey, error) {
-	return FindKeyPairOnSlot(defaultSlot, id, label)
+	return FindKeyPairOnSlot(instance.slot, id, label)
 }
 
 // FindKeyPairOnSlot retrieves a previously created asymmetric key, using a specified slot.
@@ -88,7 +88,7 @@ func FindKeyPair(id []byte, label []byte) (crypto.PrivateKey, error) {
 func FindKeyPairOnSlot(slot uint, id []byte, label []byte) (crypto.PrivateKey, error) {
 	var err error
 	var k crypto.PrivateKey
-	if err = ensureSessions(libHandle, slot); err != nil {
+	if err = ensureSessions(instance, slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {

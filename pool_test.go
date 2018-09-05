@@ -25,38 +25,23 @@ import (
 	"crypto"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/json"
 	"github.com/miekg/pkcs11"
-	"log"
-	"os"
 	"testing"
 	"time"
 )
 
 func TestPoolTimeout(t *testing.T) {
 	t.Run("first login", func(t *testing.T) {
-		prevIdleTimeout := idleTimeout
-		defer func() {idleTimeout = prevIdleTimeout}()
-		idleTimeout = time.Second
+		prevIdleTimeout := instance.idleTimeout
+		defer func() {instance.idleTimeout = prevIdleTimeout}()
+		instance.idleTimeout = time.Second
 
-		cfg, err := getConfig("config")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if cfg.Pin == "" {
-			t.Fatal("invalid configuration. configuration must have PIN non empty.")
-		}
-
-		_, err = Configure(cfg)
-		if err != nil {
-			t.Fatal("failed to configure service:", err)
-		}
+		configureWithPin(t)
 		defer Close()
 
-		time.Sleep(idleTimeout + time.Second)
+		time.Sleep(instance.idleTimeout + time.Second)
 
-		_, err = GenerateECDSAKeyPair(elliptic.P256())
+		_, err := GenerateECDSAKeyPair(elliptic.P256())
 		if err != nil {
 			if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
 				t.Fatal("pool handle session incorrectly, login required but missing:", err)
@@ -67,23 +52,11 @@ func TestPoolTimeout(t *testing.T) {
 	})
 
 	t.Run("reuse expired handle", func(t *testing.T) {
-		prevIdleTimeout := idleTimeout
-		defer func() {idleTimeout = prevIdleTimeout}()
-		idleTimeout = time.Second
+		prevIdleTimeout := instance.idleTimeout
+		defer func() {instance.idleTimeout = prevIdleTimeout}()
+		instance.idleTimeout = time.Second
 
-		cfg, err := getConfig("config")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if cfg.Pin == "" {
-			t.Fatal("invalid configuration. configuration must have PIN non empty.")
-		}
-
-		_, err = Configure(cfg)
-		if err != nil {
-			t.Fatal("failed to configure service:", err)
-		}
+		configureWithPin(t)
 		defer Close()
 
 		key, err := GenerateECDSAKeyPair(elliptic.P256())
@@ -91,33 +64,14 @@ func TestPoolTimeout(t *testing.T) {
 			t.Fatal("failed to generate a key:", err)
 		}
 
-		time.Sleep(idleTimeout + time.Second)
+		time.Sleep(instance.idleTimeout + time.Second)
 
 		_, err = key.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte("sha256")), crypto.SHA256)
 		if err != nil {
-			if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_OBJECT_HANDLE_INVALID {
-				t.Fatal("pool handle session incorrectly, login required but missing:", err)
-			} else {
+			if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
 				t.Fatal("failed to reuse existing key handle, unexpected error:", err)
 			}
 		}
 	})
-}
-
-func getConfig(configLocation string) (*PKCS11Config, error) {
-	file, err := os.Open(configLocation)
-	if err != nil {
-		log.Printf("Could not open config file: %s", configLocation)
-		return nil, err
-	}
-	defer file.Close()
-	configDecoder := json.NewDecoder(file)
-	config := &PKCS11Config{}
-	err = configDecoder.Decode(config)
-	if err != nil {
-		log.Printf("Could decode config file: %s", err.Error())
-		return nil, err
-	}
-	return config, nil
 }
 
