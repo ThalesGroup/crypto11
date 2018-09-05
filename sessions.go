@@ -23,19 +23,17 @@ package crypto11
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
-	"errors"
+	"sync"
+	"time"
 )
 
-const (
-	idleTimeout       = 30 * time.Second
-	newSessionTimeout = 15 * time.Second
-)
+const newSessionTimeout = 15 * time.Second
+
+var idleTimeout = 30 * time.Second
 
 // PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
 type PKCS11Session struct {
@@ -50,7 +48,7 @@ type sessionPool struct {
 }
 
 // Map of slot IDs to session pools
-var pool = &sessionPool{pool: map[uint]*pools.ResourcePool{}}
+var pool = newSessionPool()
 
 // Error specifies an event when the requested slot is already set in the sessions pool
 var errSlotBusy = errors.New("pool slot busy")
@@ -64,6 +62,13 @@ func newSession(ctx *pkcs11.Ctx, slot uint) (*PKCS11Session, error) {
 		return nil, err
 	}
 	return &PKCS11Session{ctx, session}, nil
+}
+
+// Create a new session pool with default configuration
+func newSessionPool() *sessionPool {
+	return &sessionPool{
+		pool: map[uint]*pools.ResourcePool{},
+	}
 }
 
 // Close closes the session.

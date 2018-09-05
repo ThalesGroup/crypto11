@@ -35,6 +35,10 @@ import (
 
 func TestPoolTimeout(t *testing.T) {
 	t.Run("first login", func(t *testing.T) {
+		prevIdleTimeout := idleTimeout
+		defer func() {idleTimeout = prevIdleTimeout}()
+		idleTimeout = time.Second
+
 		cfg, err := getConfig("config")
 		if err != nil {
 			t.Fatal(err)
@@ -63,6 +67,10 @@ func TestPoolTimeout(t *testing.T) {
 	})
 
 	t.Run("reuse expired handle", func(t *testing.T) {
+		prevIdleTimeout := idleTimeout
+		defer func() {idleTimeout = prevIdleTimeout}()
+		idleTimeout = time.Second
+
 		cfg, err := getConfig("config")
 		if err != nil {
 			t.Fatal(err)
@@ -94,9 +102,6 @@ func TestPoolTimeout(t *testing.T) {
 			}
 		}
 	})
-
-	// TODO: make timeout configurable. timeouts configuration must stick to the pool instance.
-	// TODO: reduce idle timeout in test with the help of configuration.
 }
 
 func getConfig(configLocation string) (*PKCS11Config, error) {
