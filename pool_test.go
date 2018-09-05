@@ -22,7 +22,9 @@
 package crypto11
 
 import (
+	"crypto"
 	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/json"
 	"github.com/miekg/pkcs11"
 	"log"
@@ -32,32 +34,67 @@ import (
 )
 
 func TestPoolTimeout(t *testing.T) {
-	cfg, err := getConfig("config")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if cfg.Pin == "" {
-		t.Fatal("invalid configuration. configuration must have PIN non empty.")
-	}
-
-	_, err = Configure(cfg)
-	if err != nil {
-		t.Fatal("failed to configure service:", err)
-	}
-
-	time.Sleep(idleTimeout + 2*time.Second)
-
-	_, err = GenerateECDSAKeyPair(elliptic.P256())
-	if err != nil {
-		if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
-			t.Fatal("pool handle session incorrectly, login required but missing:", err)
-		} else {
-			t.Fatal("failed to generate a key, unexpected error:", err)
+	t.Run("first login", func(t *testing.T) {
+		cfg, err := getConfig("config")
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
 
-	// TODO: check handling of handles from previous sessions with pkcs11: 0x82: CKR_OBJECT_HANDLE_INVALID
+		if cfg.Pin == "" {
+			t.Fatal("invalid configuration. configuration must have PIN non empty.")
+		}
+
+		_, err = Configure(cfg)
+		if err != nil {
+			t.Fatal("failed to configure service:", err)
+		}
+		defer Close()
+
+		time.Sleep(idleTimeout + time.Second)
+
+		_, err = GenerateECDSAKeyPair(elliptic.P256())
+		if err != nil {
+			if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
+				t.Fatal("pool handle session incorrectly, login required but missing:", err)
+			} else {
+				t.Fatal("failed to generate a key, unexpected error:", err)
+			}
+		}
+	})
+
+	t.Run("reuse expired handle", func(t *testing.T) {
+		cfg, err := getConfig("config")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if cfg.Pin == "" {
+			t.Fatal("invalid configuration. configuration must have PIN non empty.")
+		}
+
+		_, err = Configure(cfg)
+		if err != nil {
+			t.Fatal("failed to configure service:", err)
+		}
+		defer Close()
+
+		key, err := GenerateECDSAKeyPair(elliptic.P256())
+		if err != nil {
+			t.Fatal("failed to generate a key:", err)
+		}
+
+		time.Sleep(idleTimeout + time.Second)
+
+		_, err = key.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte("sha256")), crypto.SHA256)
+		if err != nil {
+			if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_OBJECT_HANDLE_INVALID {
+				t.Fatal("pool handle session incorrectly, login required but missing:", err)
+			} else {
+				t.Fatal("failed to reuse existing key handle, unexpected error:", err)
+			}
+		}
+	})
+
 	// TODO: make timeout configurable. timeouts configuration must stick to the pool instance.
 	// TODO: reduce idle timeout in test with the help of configuration.
 }
