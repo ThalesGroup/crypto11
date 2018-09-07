@@ -126,6 +126,45 @@ func TestLoginContext(t *testing.T) {
 		}
 		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", 0))
 	})
+
+	t.Run("login context shared between sessions", func(t *testing.T) {
+		configureWithPin(t)
+		defer Close()
+
+		// Generate a key and and close a session
+		var err error
+		var key *PKCS11PrivateKeyDSA
+		psize := dsa.L1024N160
+		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
+			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
+			return
+		}
+		if key == nil {
+			t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
+			return
+		}
+
+		var id []byte
+		if id, _, err = key.Identify(); err != nil {
+			t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
+			return
+		}
+
+		if err = withSession(instance.slot, func(s1 *PKCS11Session) error {
+			return withSession(instance.slot, func(s2 *PKCS11Session) error {
+				var key2 crypto.PrivateKey
+				if key2, err = FindKeyPair(id, nil); err != nil {
+					t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
+					return nil
+				}
+				testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", 0))
+				return nil
+			})
+		}); err != nil {
+			t.Errorf("with session failed: %s", err.Error())
+			return
+		}
+	})
 }
 
 func configureWithPin(t *testing.T) (*pkcs11.Ctx, error) {
