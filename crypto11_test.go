@@ -162,6 +162,37 @@ func TestLoginContext(t *testing.T) {
 	})
 }
 
+func TestIdentityExpiration(t *testing.T) {
+	prevIdleTimeout := instance.idleTimeout
+	defer func() {instance.idleTimeout = prevIdleTimeout}()
+	instance.idleTimeout = time.Second
+
+	configureWithPin(t)
+	defer Close()
+
+	// Generate a key and and close a session
+	var err error
+	var key *PKCS11PrivateKeyDSA
+	psize := dsa.L1024N160
+	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
+		t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
+		return
+	}
+	if key == nil {
+		t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
+		return
+	}
+
+	// kick out all idle sessions
+	time.Sleep(instance.idleTimeout + time.Second)
+
+	if _, _, err = key.Identify(); err != nil {
+		if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
+			t.Fatal("failed to generate a key, unexpected error:", err)
+		}
+	}
+}
+
 func configureWithPin(t *testing.T) (*pkcs11.Ctx, error) {
 	cfg, err := getConfig("config")
 	if err != nil {
