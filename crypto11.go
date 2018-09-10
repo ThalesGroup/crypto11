@@ -251,16 +251,6 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 		return nil, err
 	}
 
-	if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 {
-		if err = withSession(instance.slot, func(session *PKCS11Session) error {
-			// login is pkcs11 context wide, not just handle/session scoped
-			return session.Ctx.Login(session.Handle, pkcs11.CKU_USER, config.Pin)
-		}); err != nil {
-			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
-			return nil, err
-		}
-	}
-
 	return instance.ctx, nil
 }
 

@@ -114,11 +114,6 @@ func TestLoginContext(t *testing.T) {
 		// kick out all idle sessions
 		time.Sleep(instance.idleTimeout + time.Second)
 
-		// Reopen a session and try to find a key.
-		// Valid session must enlist a key.
-		// If login is not performed than it will fail.
-		configureWithPin(t)
-
 		var key2 crypto.PrivateKey
 		if key2, err = FindKeyPair(id, nil); err != nil {
 			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)

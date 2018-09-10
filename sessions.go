@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
+	"log"
 	"sync"
 	"time"
 )
@@ -144,7 +145,29 @@ func ensureSessions(ctx* libCtx, slot uint) error {
 func setupSessions(c *libCtx, slot uint) error {
 	return pool.PutIfAbsent(slot, pools.NewResourcePool(
 		func() (pools.Resource, error) {
-			return newSession(c.ctx, slot)
+			s, err := newSession(c.ctx, slot)
+			if err != nil {
+				return nil, err
+			}
+
+			if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 && instance.cfg.Pin != "" {
+				// login is pkcs11 context wide, not just handle/session scoped
+				err = s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin)
+				if err != nil {
+					if code, ok := err.(pkcs11.Error); ok && (
+						code == pkcs11.CKR_USER_ANOTHER_ALREADY_LOGGED_IN ||
+						code == pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+							err = nil
+							// break
+					} else {
+						log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
+						s.Close()
+						return nil, err
+					}
+				}
+			}
+
+			return s, nil
 		},
 		c.cfg.MaxSessions,
 		c.cfg.MaxSessions,
