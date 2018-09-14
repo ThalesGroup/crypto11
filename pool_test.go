@@ -25,53 +25,56 @@ import (
 	"crypto"
 	"crypto/elliptic"
 	"crypto/rand"
+	"fmt"
 	"github.com/miekg/pkcs11"
 	"testing"
 	"time"
 )
 
 func TestPoolTimeout(t *testing.T) {
-	t.Run("first login", func(t *testing.T) {
-		prevIdleTimeout := instance.idleTimeout
-		defer func() {instance.idleTimeout = prevIdleTimeout}()
-		instance.idleTimeout = time.Second
+	for _, d := range []time.Duration{0, time.Second} {
+		t.Run(fmt.Sprintf("first login, exp %v", d), func(t *testing.T) {
+			prevIdleTimeout := instance.cfg.IdleTimeout
+			defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+			instance.cfg.IdleTimeout = d
 
-		configureWithPin(t)
-		defer Close()
+			configureWithPin(t)
+			defer Close()
 
-		time.Sleep(instance.idleTimeout + time.Second)
+			time.Sleep(instance.cfg.IdleTimeout + time.Second)
 
-		_, err := GenerateECDSAKeyPair(elliptic.P256())
-		if err != nil {
-			if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
-				t.Fatal("pool handle session incorrectly, login required but missing:", err)
-			} else {
-				t.Fatal("failed to generate a key, unexpected error:", err)
+			_, err := GenerateECDSAKeyPair(elliptic.P256())
+			if err != nil {
+				if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
+					t.Fatal("pool handle session incorrectly, login required but missing:", err)
+				} else {
+					t.Fatal("failed to generate a key, unexpected error:", err)
+				}
 			}
-		}
-	})
+		})
 
-	t.Run("reuse expired handle", func(t *testing.T) {
-		prevIdleTimeout := instance.idleTimeout
-		defer func() {instance.idleTimeout = prevIdleTimeout}()
-		instance.idleTimeout = time.Second
+		t.Run(fmt.Sprintf("reuse expired handle, exp %v", d), func(t *testing.T) {
+			prevIdleTimeout := instance.cfg.IdleTimeout
+			defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+			instance.cfg.IdleTimeout = d
 
-		configureWithPin(t)
-		defer Close()
+			configureWithPin(t)
+			defer Close()
 
-		key, err := GenerateECDSAKeyPair(elliptic.P256())
-		if err != nil {
-			t.Fatal("failed to generate a key:", err)
-		}
-
-		time.Sleep(instance.idleTimeout + time.Second)
-
-		_, err = key.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte("sha256")), crypto.SHA256)
-		if err != nil {
-			if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
-				t.Fatal("failed to reuse existing key handle, unexpected error:", err)
+			key, err := GenerateECDSAKeyPair(elliptic.P256())
+			if err != nil {
+				t.Fatal("failed to generate a key:", err)
 			}
-		}
-	})
+
+			time.Sleep(instance.cfg.IdleTimeout + time.Second)
+
+			_, err = key.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte("sha256")), crypto.SHA256)
+			if err != nil {
+				if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
+					t.Fatal("failed to reuse existing key handle, unexpected error:", err)
+				}
+			}
+		})
+	}
 }
 

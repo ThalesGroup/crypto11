@@ -85,9 +85,9 @@ func TestLoginContext(t *testing.T) {
 	})
 
 	t.Run("key identity with expiration", func(t *testing.T) {
-		prevIdleTimeout := instance.idleTimeout
-		defer func() {instance.idleTimeout = prevIdleTimeout}()
-		instance.idleTimeout = time.Second
+		prevIdleTimeout := instance.cfg.IdleTimeout
+		defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+		instance.cfg.IdleTimeout = time.Second
 
 		configureWithPin(t)
 		defer Close()
@@ -111,8 +111,8 @@ func TestLoginContext(t *testing.T) {
 			return
 		}
 
-		// kick out all idle sessions
-		time.Sleep(instance.idleTimeout + time.Second)
+		// kick out all cfg.Idle sessions
+		time.Sleep(instance.cfg.IdleTimeout + time.Second)
 
 		var key2 crypto.PrivateKey
 		if key2, err = FindKeyPair(id, nil); err != nil {
@@ -163,9 +163,9 @@ func TestLoginContext(t *testing.T) {
 }
 
 func TestIdentityExpiration(t *testing.T) {
-	prevIdleTimeout := instance.idleTimeout
-	defer func() {instance.idleTimeout = prevIdleTimeout}()
-	instance.idleTimeout = time.Second
+	prevIdleTimeout := instance.cfg.IdleTimeout
+	defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+	instance.cfg.IdleTimeout = time.Second
 
 	configureWithPin(t)
 	defer Close()
@@ -183,8 +183,8 @@ func TestIdentityExpiration(t *testing.T) {
 		return
 	}
 
-	// kick out all idle sessions
-	time.Sleep(instance.idleTimeout + time.Second)
+	// kick out all cfg.Idle sessions
+	time.Sleep(instance.cfg.IdleTimeout + time.Second)
 
 	if _, _, err = key.Identify(); err != nil {
 		if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {

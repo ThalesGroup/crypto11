@@ -135,8 +135,11 @@ type PKCS11PrivateKey struct {
 
 /* Nasty globals */
 var instance = &libCtx{
-	cfg: &PKCS11Config{},
-	idleTimeout: idleTimeout,
+	cfg: &PKCS11Config{
+		MaxSessions: DefaultMaxSessions,
+		IdleTimeout: 0,
+		PoolWaitTimeout: 0,
+	},
 }
 
 // Represent library pkcs11 context and token configuration
@@ -146,8 +149,6 @@ type libCtx struct {
 
 	token *pkcs11.TokenInfo
 	slot  uint
-
-	idleTimeout time.Duration
 }
 
 // Find a token given its serial number
@@ -188,6 +189,12 @@ type PKCS11Config struct {
 
 	// Maximum number of concurrent sessions to open
 	MaxSessions int
+
+	// Session idle timeout to be evicted from the pool
+	IdleTimeout time.Duration
+
+	// Maximum time allowed to wait a sessions pool for a session
+	PoolWaitTimeout time.Duration
 }
 
 // Configure configures PKCS#11 from a PKCS11Config.
@@ -219,6 +226,7 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 		log.Printf("PKCS#11 library already configured")
 		return instance.ctx, nil
 	}
+
 	if config.MaxSessions == 0 {
 		config.MaxSessions = DefaultMaxSessions
 	}
@@ -249,6 +257,16 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 
 	if err := setupSessions(instance, instance.slot); err != nil {
 		return nil, err
+	}
+
+	// login required if a pool evict idle sessions (handled by the pool) or
+	// for the first connection in the pool (handled here)
+	if instance.cfg.IdleTimeout == 0 {
+		if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 && instance.cfg.Pin != "" {
+			if err = withSession(instance.slot, loginToken); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return instance.ctx, nil

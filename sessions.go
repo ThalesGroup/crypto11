@@ -29,12 +29,7 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	"log"
 	"sync"
-	"time"
 )
-
-const newSessionTimeout = 15 * time.Second
-
-const idleTimeout = 30 * time.Second
 
 // PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
 type PKCS11Session struct {
@@ -105,8 +100,12 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 		return fmt.Errorf("crypto11: no session for slot %d", slot)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), newSessionTimeout)
-	defer cancel()
+	ctx := context.Background()
+	if instance.cfg.PoolWaitTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), instance.cfg.PoolWaitTimeout)
+		defer cancel()
+	}
 
 	session, err := sessionPool.Get(ctx)
 	if err != nil {
@@ -151,17 +150,10 @@ func setupSessions(c *libCtx, slot uint) error {
 			}
 
 			if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 && instance.cfg.Pin != "" {
-				// login is pkcs11 context wide, not just handle/session scoped
-				err = s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin)
-				if err != nil {
-					if code, ok := err.(pkcs11.Error); ok && (
-						code == pkcs11.CKR_USER_ANOTHER_ALREADY_LOGGED_IN ||
-						code == pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
-							err = nil
-							// break
-					} else {
-						log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
-						s.Close()
+				// login required if a pool evict idle sessions or
+				// for the first connection in the pool (handled in lib conf)
+				if instance.cfg.IdleTimeout > 0 {
+					if err = loginToken(s); err != nil {
 						return nil, err
 					}
 				}
@@ -171,8 +163,25 @@ func setupSessions(c *libCtx, slot uint) error {
 		},
 		c.cfg.MaxSessions,
 		c.cfg.MaxSessions,
-		c.idleTimeout,
+		c.cfg.IdleTimeout,
 	))
+}
+
+func loginToken(s *PKCS11Session) error {
+	// login is pkcs11 context wide, not just handle/session scoped
+	err := s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin)
+	if err != nil {
+		if code, ok := err.(pkcs11.Error); ok && (
+			code == pkcs11.CKR_USER_ANOTHER_ALREADY_LOGGED_IN ||
+				code == pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+			return nil
+		} else {
+			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
+			s.Close()
+			return err
+		}
+	}
+	return nil
 }
 
 // Releases a sessions specific to the requested slot if present.
