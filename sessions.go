@@ -171,9 +171,7 @@ func loginToken(s *PKCS11Session) error {
 	// login is pkcs11 context wide, not just handle/session scoped
 	err := s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin)
 	if err != nil {
-		if code, ok := err.(pkcs11.Error); ok && (
-			code == pkcs11.CKR_USER_ANOTHER_ALREADY_LOGGED_IN ||
-				code == pkcs11.CKR_USER_ALREADY_LOGGED_IN) {
+		if code, ok := err.(pkcs11.Error); ok && code == pkcs11.CKR_USER_ALREADY_LOGGED_IN {
 			return nil
 		} else {
 			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
