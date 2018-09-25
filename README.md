@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/ThalesIgnite/crypto11.svg?branch=master)](https://travis-ci.com/ThalesIgnite/crypto11)
+
 Crypto11
 ========
 
@@ -38,8 +40,8 @@ crypto11 manages it's dependencies via `dep`.  To Install `dep` run:
 
 Clone, ensure deps, and build:
 
-    go get github.com/thalesignite/crypto11
-    cd $GOPATH/src/github.com/thalesignite/crypto11
+    go get github.com/ThalesIgnite/crypto11
+    cd $GOPATH/src/github.com/ThalesIgnite/crypto11
     dep ensure
     go build
 
@@ -122,7 +124,7 @@ Testing with SoftHSM2
 To set up a slot:
 
     $ cat softhsm2.conf
-    directories.tokendir = /home/rjk/go/src/github.com/thalesignite/crypto11/tokens
+    directories.tokendir = /home/rjk/go/src/github.com/ThalesIgnite/crypto11/tokens
     objectstore.backend = file
     log.level = INFO
     $ mkdir tokens

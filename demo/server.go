@@ -18,7 +18,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/thalesignite/crypto11"
+	"github.com/ThalesIgnite/crypto11"
 	"io/ioutil"
 	"log"
 	"net/http"

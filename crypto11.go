@@ -69,7 +69,7 @@
 // The PKCS1v15DecryptOptions SessionKeyLen field is not implemented
 // and an error is returned if it is nonzero.
 // The reason for this is that it is not possible for crypto11 to guarantee the constant-time behavior in the specification.
-// See https://github.com/thalesignite/crypto11/issues/5 for further discussion.
+// See https://github.com/ThalesIgnite/crypto11/issues/5 for further discussion.
 package crypto11
 
 import (
