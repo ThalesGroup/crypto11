@@ -23,18 +23,12 @@ package crypto11
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/miekg/pkcs11"
 	"github.com/youtube/vitess/go/pools"
-	"errors"
-)
-
-const (
-	idleTimeout       = 30 * time.Second
-	newSessionTimeout = 15 * time.Second
+	"log"
+	"sync"
 )
 
 // PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
@@ -50,7 +44,7 @@ type sessionPool struct {
 }
 
 // Map of slot IDs to session pools
-var pool = &sessionPool{pool: map[uint]*pools.ResourcePool{}}
+var pool = newSessionPool()
 
 // Error specifies an event when the requested slot is already set in the sessions pool
 var errSlotBusy = errors.New("pool slot busy")
@@ -64,6 +58,13 @@ func newSession(ctx *pkcs11.Ctx, slot uint) (*PKCS11Session, error) {
 		return nil, err
 	}
 	return &PKCS11Session{ctx, session}, nil
+}
+
+// Create a new session pool with default configuration
+func newSessionPool() *sessionPool {
+	return &sessionPool{
+		pool: map[uint]*pools.ResourcePool{},
+	}
 }
 
 // Close closes the session.
@@ -99,8 +100,12 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 		return fmt.Errorf("crypto11: no session for slot %d", slot)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), newSessionTimeout)
-	defer cancel()
+	ctx := context.Background()
+	if instance.cfg.PoolWaitTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), instance.cfg.PoolWaitTimeout)
+		defer cancel()
+	}
 
 	session, err := sessionPool.Get(ctx)
 	if err != nil {
@@ -108,11 +113,26 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 	}
 	defer sessionPool.Put(session)
 
-	return f(session.(*PKCS11Session))
+	s := session.(*PKCS11Session)
+	err = f(s)
+	if err != nil {
+		// if a request required login, then try to login
+		if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN && instance.cfg.Pin != "" {
+			if err = s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin); err != nil {
+				return err
+			}
+			// retry after login
+			return f(s)
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 // Ensures that sessions are setup.
-func ensureSessions(ctx* pkcs11.Ctx, slot uint) error {
+func ensureSessions(ctx* libCtx, slot uint) error {
 	if err := setupSessions(ctx, slot); err != nil && err != errSlotBusy {
 		return err
 	}
@@ -121,15 +141,45 @@ func ensureSessions(ctx* pkcs11.Ctx, slot uint) error {
 
 // Create the session pool for a given slot if it does not exist
 // already.
-func setupSessions(ctx* pkcs11.Ctx, slot uint) error {
+func setupSessions(c *libCtx, slot uint) error {
 	return pool.PutIfAbsent(slot, pools.NewResourcePool(
 		func() (pools.Resource, error) {
-			return newSession(ctx, slot)
+			s, err := newSession(c.ctx, slot)
+			if err != nil {
+				return nil, err
+			}
+
+			if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 && instance.cfg.Pin != "" {
+				// login required if a pool evict idle sessions or
+				// for the first connection in the pool (handled in lib conf)
+				if instance.cfg.IdleTimeout > 0 {
+					if err = loginToken(s); err != nil {
+						return nil, err
+					}
+				}
+			}
+
+			return s, nil
 		},
-		maxSessions,
-		maxSessions,
-		idleTimeout,
+		c.cfg.MaxSessions,
+		c.cfg.MaxSessions,
+		c.cfg.IdleTimeout,
 	))
+}
+
+func loginToken(s *PKCS11Session) error {
+	// login is pkcs11 context wide, not just handle/session scoped
+	err := s.Ctx.Login(s.Handle, pkcs11.CKU_USER, instance.cfg.Pin)
+	if err != nil {
+		if code, ok := err.(pkcs11.Error); ok && code == pkcs11.CKR_USER_ALREADY_LOGGED_IN {
+			return nil
+		} else {
+			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
+			s.Close()
+			return err
+		}
+	}
+	return nil
 }
 
 // Releases a sessions specific to the requested slot if present.

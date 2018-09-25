@@ -222,7 +222,7 @@ func exportECDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle)
 // Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
 func GenerateECDSAKeyPair(c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
-	return GenerateECDSAKeyPairOnSlot(defaultSlot, nil, nil, c)
+	return GenerateECDSAKeyPairOnSlot(instance.slot, nil, nil, c)
 }
 
 // GenerateECDSAKeyPairOnSlot creates an ECDSA private key using curve c, on a specified slot.
@@ -234,7 +234,7 @@ func GenerateECDSAKeyPair(c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 func GenerateECDSAKeyPairOnSlot(slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	var k *PKCS11PrivateKeyECDSA
 	var err error
-	if err = ensureSessions(libHandle, slot); err != nil {
+	if err = ensureSessions(instance, slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {

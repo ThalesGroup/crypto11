@@ -67,7 +67,7 @@ func exportDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (
 //
 // The key will have a random label and ID.
 func GenerateDSAKeyPair(params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
-	return GenerateDSAKeyPairOnSlot(defaultSlot, nil, nil, params)
+	return GenerateDSAKeyPairOnSlot(instance.slot, nil, nil, params)
 }
 
 // GenerateDSAKeyPairOnSlot creates a DSA private key on a specified slot
@@ -76,7 +76,7 @@ func GenerateDSAKeyPair(params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 func GenerateDSAKeyPairOnSlot(slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 	var k *PKCS11PrivateKeyDSA
 	var err error
-	if err = ensureSessions(libHandle, slot); err != nil {
+	if err = ensureSessions(instance, slot); err != nil {
 		return nil, err
 	}
 	err = withSession(slot, func(session *PKCS11Session) error {
