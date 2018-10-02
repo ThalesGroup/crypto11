@@ -5,7 +5,7 @@
   branch = "master"
   name = "github.com/miekg/pkcs11"
   packages = ["."]
-  revision = "287d9350987cc9334667882061e202e96cdfb4d0"
+  revision = "c6d6ee821fb161c8022ceb8ba93ce3b815d8d62e"
 
 [[projects]]
   name = "github.com/youtube/vitess"
@@ -17,7 +17,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["context"]
-  revision = "f4c29de78a2a91c00474a2e689954305c350adf9"
+  revision = "4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de"
 
 [[projects]]
   name = "vitess.io/vitess"
