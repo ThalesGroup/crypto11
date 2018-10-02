@@ -35,7 +35,7 @@ func TestPoolTimeout(t *testing.T) {
 	for _, d := range []time.Duration{0, time.Second} {
 		t.Run(fmt.Sprintf("first login, exp %v", d), func(t *testing.T) {
 			prevIdleTimeout := instance.cfg.IdleTimeout
-			defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
 			instance.cfg.IdleTimeout = d
 
 			configureWithPin(t)
@@ -55,7 +55,7 @@ func TestPoolTimeout(t *testing.T) {
 
 		t.Run(fmt.Sprintf("reuse expired handle, exp %v", d), func(t *testing.T) {
 			prevIdleTimeout := instance.cfg.IdleTimeout
-			defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
+			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
 			instance.cfg.IdleTimeout = d
 
 			configureWithPin(t)
@@ -68,7 +68,9 @@ func TestPoolTimeout(t *testing.T) {
 
 			time.Sleep(instance.cfg.IdleTimeout + time.Second)
 
-			_, err = key.Sign(rand.Reader, crypto.SHA256.New().Sum([]byte("sha256")), crypto.SHA256)
+			digest := crypto.SHA256.New()
+			digest.Write([]byte("sha256"))
+			_, err = key.Sign(rand.Reader, digest.Sum(nil), crypto.SHA256)
 			if err != nil {
 				if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
 					t.Fatal("failed to reuse existing key handle, unexpected error:", err)
@@ -77,4 +79,3 @@ func TestPoolTimeout(t *testing.T) {
 		})
 	}
 }
-
