@@ -148,3 +148,49 @@ func FindKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []
 func (signer PKCS11PrivateKey) Public() crypto.PublicKey {
 	return signer.PubKey
 }
+
+// FindKey retrieves a previously created symmetric key.
+//
+// Either (but not both) of id and label may be nil, in which case they are ignored.
+func FindKey(id []byte, label []byte) (*PKCS11SecretKey, error) {
+	return FindKeyOnSlot(instance.slot, id, label)
+}
+
+// FindKeyOnSlot retrieves a previously created symmetric key, using a specified slot.
+//
+// Either (but not both) of id and label may be nil, in which case they are ignored.
+func FindKeyOnSlot(slot uint, id []byte, label []byte) (*PKCS11SecretKey, error) {
+	var err error
+	var k *PKCS11SecretKey
+	if err = ensureSessions(instance, slot); err != nil {
+		return nil, err
+	}
+	err = withSession(slot, func(session *PKCS11Session) error {
+		k, err = FindKeyOnSession(session, slot, id, label)
+		return err
+	})
+	return k, err
+}
+
+// FindKeyOnSession retrieves a previously created symmetric key, using a specified session.
+//
+// Either (but not both) of id and label may be nil, in which case they are ignored.
+func FindKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte) (key *PKCS11SecretKey, err error) {
+	var privHandle pkcs11.ObjectHandle
+	if privHandle, err = findKey(session, id, label, pkcs11.CKO_SECRET_KEY, ^uint(0)); err != nil {
+		return
+	}
+	attributes := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
+	}
+	if attributes, err = session.Ctx.GetAttributeValue(session.Handle, privHandle, attributes); err != nil {
+		return
+	}
+	if cipher, ok := Ciphers[int(bytesToUlong(attributes[0].Value))]; ok {
+		key = &PKCS11SecretKey{PKCS11Object{privHandle, slot}, cipher}
+	} else {
+		err = ErrUnsupportedKeyType
+		return
+	}
+	return
+}

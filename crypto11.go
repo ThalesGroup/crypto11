@@ -69,7 +69,12 @@
 // The PKCS1v15DecryptOptions SessionKeyLen field is not implemented
 // and an error is returned if it is nonzero.
 // The reason for this is that it is not possible for crypto11 to guarantee the constant-time behavior in the specification.
-// See https://github.com/ThalesIgnite/crypto11/issues/5 for further discussion.
+// See https://github.com/thalesignite/crypto11/issues/5 for further discussion.
+//
+// Symmetric crypto support via cipher.Block is very slow.
+// You can use the BlockModeCloser API
+// but you must call the Close() interface (not found in cipher.BlockMode).
+// See https://github.com/ThalesIgnite/crypto11/issues/6 for further discussion.
 package crypto11
 
 import (
@@ -136,8 +141,8 @@ type PKCS11PrivateKey struct {
 /* Nasty globals */
 var instance = &libCtx{
 	cfg: &PKCS11Config{
-		MaxSessions: DefaultMaxSessions,
-		IdleTimeout: 0,
+		MaxSessions:     DefaultMaxSessions,
+		IdleTimeout:     0,
 		PoolWaitTimeout: 0,
 	},
 }
