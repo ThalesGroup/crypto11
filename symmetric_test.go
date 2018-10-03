@@ -128,19 +128,12 @@ func testHardSymmetric(t *testing.T, keytype int, bits int) {
 			testAEADMode(t, aead, 127, 129)
 		})
 		t.Run("GCMHard", func(t *testing.T) {
-			var info pkcs11.Info
-			if info, err = instance.ctx.GetInfo(); err != nil {
-				t.Errorf("GetInfo: %v", err)
-				return
-			}
-			if info.ManufacturerID == "nCipher Corp. Ltd" {
-				t.Skipf("nShield PKCS#11 does not have GCM yet")
-			}
 			aead, err := key2.NewGCM()
 			if err != nil {
 				t.Errorf("key2.NewGCM: %v", err)
 				return
 			}
+			needMechanism(t, key2.Slot, pkcs11.CKM_AES_GCM)
 			testAEADMode(t, aead, 127, 129)
 		})
 		// TODO check that hard/soft is consistent!
