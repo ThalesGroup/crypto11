@@ -31,8 +31,11 @@ import (
 )
 
 const (
+	// NFCK_VENDOR_NCIPHER distinguishes nShield vendor-specific mechanisms.
 	NFCK_VENDOR_NCIPHER = 0xde436972
-	CKM_NCIPHER         = (pkcs11.CKM_VENDOR_DEFINED | NFCK_VENDOR_NCIPHER)
+
+	// CKM_NCIPHER is the base for nShield vendor-specific mechanisms.
+	CKM_NCIPHER = (pkcs11.CKM_VENDOR_DEFINED | NFCK_VENDOR_NCIPHER)
 
 	// CKM_NC_MD5_HMAC_KEY_GEN is the nShield-specific HMACMD5 key-generation mechanism
 	CKM_NC_MD5_HMAC_KEY_GEN = (CKM_NCIPHER + 0x6)

@@ -33,13 +33,13 @@ import (
 
 // PKCS11Session is a pair of PKCS#11 context and a reference to a loaded session handle.
 type PKCS11Session struct {
-	Ctx *pkcs11.Ctx
+	Ctx    *pkcs11.Ctx
 	Handle pkcs11.SessionHandle
 }
 
 // sessionPool is a thread safe pool of PKCS#11 sessions
 type sessionPool struct {
-	m sync.RWMutex
+	m    sync.RWMutex
 	pool map[uint]*pools.ResourcePool
 }
 
@@ -48,6 +48,7 @@ var pool = newSessionPool()
 
 // Error specifies an event when the requested slot is already set in the sessions pool
 var errSlotBusy = errors.New("pool slot busy")
+
 // Error when there is no pool at specific slot in the sessions pool
 var errPoolNotFound = errors.New("pool not found")
 
@@ -132,7 +133,7 @@ func withSession(slot uint, f func(session *PKCS11Session) error) error {
 }
 
 // Ensures that sessions are setup.
-func ensureSessions(ctx* libCtx, slot uint) error {
+func ensureSessions(ctx *libCtx, slot uint) error {
 	if err := setupSessions(ctx, slot); err != nil && err != errSlotBusy {
 		return err
 	}
@@ -173,11 +174,11 @@ func loginToken(s *PKCS11Session) error {
 	if err != nil {
 		if code, ok := err.(pkcs11.Error); ok && code == pkcs11.CKR_USER_ALREADY_LOGGED_IN {
 			return nil
-		} else {
-			log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
-			s.Close()
-			return err
 		}
+		log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
+		s.Close()
+		return err
+
 	}
 	return nil
 }
