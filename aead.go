@@ -63,7 +63,7 @@ func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
 		overhead:  16,
 		nonceSize: 12,
 		makeMech: func(nonce []byte, additionalData []byte) (mech []*pkcs11.Mechanism, error error) {
-			params := pkcs11.NewGCMParams(nonce, additionalData, 16)
+			params := pkcs11.NewGCMParams(nonce, additionalData, 16*8 /*bits*/)
 			mech = []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.GCMMech, params)}
 			return
 		},
