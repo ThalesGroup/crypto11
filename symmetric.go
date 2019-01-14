@@ -259,6 +259,13 @@ func GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, err
 	return GenerateSecretKeyOnSlot(instance.slot, nil, nil, bits, cipher)
 }
 
+// GenerateSecretKeyV2 creates an secret key of given length and type.
+//
+// label and/or id can be nil, in which case random values will be generated.
+func GenerateSecretKeyV2(id []byte, label []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+	return GenerateSecretKeyOnSlot(instance.slot, id, label, bits, cipher)
+}
+
 // GenerateSecretKeyOnSlot creates as symmetric key on a specified slot
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
