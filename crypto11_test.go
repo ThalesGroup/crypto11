@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 	"log"
 	"os"
 	"testing"
@@ -40,17 +41,22 @@ func TestInitializeFromConfig(t *testing.T) {
 	config.TokenSerial = "NoSuchToken"
 	config.TokenLabel = "NoSuchToken"
 	//assert.Panics(Configure(config), "Invalid config should panic")
-	ConfigureFromFile("config")
-	Close()
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+	require.NoError(t, Close())
 }
 
 func TestLoginContext(t *testing.T) {
 	t.Run("key identity with login", func(t *testing.T) {
-		configureWithPin(t)
-		defer Close()
+		_, err := configureWithPin(t)
+		require.NoError(t, err)
+
+		defer func() {
+			err = Close()
+			require.NoError(t, err)
+		}()
 
 		// Generate a key and and close a session
-		var err error
 		var key *PKCS11PrivateKeyDSA
 		psize := dsa.L1024N160
 		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
@@ -74,7 +80,8 @@ func TestLoginContext(t *testing.T) {
 		// Reopen a session and try to find a key.
 		// Valid session must enlist a key.
 		// If login is not performed than it will fail.
-		configureWithPin(t)
+		_, err = configureWithPin(t)
+		require.NoError(t, err)
 
 		var key2 crypto.PrivateKey
 		if key2, err = FindKeyPair(id, nil); err != nil {
@@ -89,11 +96,15 @@ func TestLoginContext(t *testing.T) {
 		defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
 		instance.cfg.IdleTimeout = time.Second
 
-		configureWithPin(t)
-		defer Close()
+		_, err := configureWithPin(t)
+		require.NoError(t, err)
+
+		defer func() {
+			err = Close()
+			require.NoError(t, err)
+		}()
 
 		// Generate a key and and close a session
-		var err error
 		var key *PKCS11PrivateKeyDSA
 		psize := dsa.L1024N160
 		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
@@ -123,11 +134,15 @@ func TestLoginContext(t *testing.T) {
 	})
 
 	t.Run("login context shared between sessions", func(t *testing.T) {
-		configureWithPin(t)
-		defer Close()
+		_, err := configureWithPin(t)
+		require.NoError(t, err)
+
+		defer func() {
+			err = Close()
+			require.NoError(t, err)
+		}()
 
 		// Generate a key and and close a session
-		var err error
 		var key *PKCS11PrivateKeyDSA
 		psize := dsa.L1024N160
 		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
@@ -167,11 +182,15 @@ func TestIdentityExpiration(t *testing.T) {
 	defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
 	instance.cfg.IdleTimeout = time.Second
 
-	configureWithPin(t)
-	defer Close()
+	_, err := configureWithPin(t)
+	require.NoError(t, err)
+
+	defer func() {
+		err = Close()
+		require.NoError(t, err)
+	}()
 
 	// Generate a key and and close a session
-	var err error
 	var key *PKCS11PrivateKeyDSA
 	psize := dsa.L1024N160
 	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
@@ -211,13 +230,16 @@ func configureWithPin(t *testing.T) (*pkcs11.Ctx, error) {
 	return ctx, nil
 }
 
-func getConfig(configLocation string) (*PKCS11Config, error) {
+func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
 		log.Printf("Could not open config file: %s", configLocation)
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		err = file.Close()
+	}()
+
 	configDecoder := json.NewDecoder(file)
 	config := &PKCS11Config{}
 	err = configDecoder.Decode(config)

@@ -22,15 +22,17 @@
 package crypto11
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestRandomReader(t *testing.T) {
 	var a [32768]byte
 	var r PKCS11RandReader
-	var err error
 	var n int
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	for _, size := range []int{1, 16, 32, 256, 347, 4096, 32768} {
 		if n, err = r.Read(a[:size]); err != nil {
 			t.Errorf("crypto11.PKCS11RandRead.Read: %v", err)
@@ -41,5 +43,5 @@ func TestRandomReader(t *testing.T) {
 			return
 		}
 	}
-	Close()
+	require.NoError(t, Close())
 }

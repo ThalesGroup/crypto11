@@ -28,6 +28,7 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+	"github.com/stretchr/testify/require"
 	"io"
 	"math/big"
 	"testing"
@@ -99,11 +100,12 @@ func TestNativeDSA(t *testing.T) {
 }
 
 func TestHardDSA(t *testing.T) {
-	var err error
 	var key *PKCS11PrivateKeyDSA
 	var key2, key3 crypto.PrivateKey
 	var id, label []byte
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	for psize, params := range dsaSizes {
 		if key, err = GenerateDSAKeyPair(params); err != nil {
 			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
@@ -130,7 +132,7 @@ func TestHardDSA(t *testing.T) {
 		}
 		testDsaSigning(t, key3.(crypto.Signer), psize, "hard3")
 	}
-	Close()
+	require.NoError(t, Close())
 }
 
 func testDsaSigning(t *testing.T, key crypto.Signer, psize dsa.ParameterSizes, what string) {

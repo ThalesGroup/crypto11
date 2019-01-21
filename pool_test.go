@@ -27,6 +27,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -38,12 +39,16 @@ func TestPoolTimeout(t *testing.T) {
 			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
 			instance.cfg.IdleTimeout = d
 
-			configureWithPin(t)
-			defer Close()
+			_, err := configureWithPin(t)
+			require.NoError(t, err)
+
+			defer func() {
+				require.NoError(t, Close())
+			}()
 
 			time.Sleep(instance.cfg.IdleTimeout + time.Second)
 
-			_, err := GenerateECDSAKeyPair(elliptic.P256())
+			_, err = GenerateECDSAKeyPair(elliptic.P256())
 			if err != nil {
 				if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
 					t.Fatal("pool handle session incorrectly, login required but missing:", err)
@@ -58,8 +63,12 @@ func TestPoolTimeout(t *testing.T) {
 			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
 			instance.cfg.IdleTimeout = d
 
-			configureWithPin(t)
-			defer Close()
+			_, err := configureWithPin(t)
+			require.NoError(t, err)
+
+			defer func() {
+				require.NoError(t, Close())
+			}()
 
 			key, err := GenerateECDSAKeyPair(elliptic.P256())
 			if err != nil {

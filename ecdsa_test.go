@@ -29,6 +29,7 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -57,11 +58,12 @@ func TestNativeECDSA(t *testing.T) {
 }
 
 func TestHardECDSA(t *testing.T) {
-	var err error
 	var key *PKCS11PrivateKeyECDSA
 	var key2, key3 crypto.PrivateKey
 	var id, label []byte
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	for _, curve := range curves {
 		if key, err = GenerateECDSAKeyPair(curve); err != nil {
 			t.Errorf("GenerateECDSAKeyPair: %v", err)
@@ -92,7 +94,7 @@ func TestHardECDSA(t *testing.T) {
 		}
 		testEcdsaSigning(t, key3.(crypto.Signer), crypto.SHA384)
 	}
-	Close()
+	require.NoError(t, Close())
 }
 
 func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
