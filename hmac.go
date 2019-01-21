@@ -214,7 +214,10 @@ func (hi *hmacImplementation) Sum(b []byte) []byte {
 
 func (hi *hmacImplementation) Reset() {
 	hi.Sum(nil) // Clean up
-	hi.initialize()
+	err := hi.initialize()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (hi *hmacImplementation) Size() int {

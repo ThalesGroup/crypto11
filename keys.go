@@ -46,8 +46,7 @@ func (object *PKCS11Object) Identify() (id []byte, label []byte, err error) {
 
 // Find a key object.  For asymmetric keys this only finds one half so
 // callers will call it twice.
-func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, keytype uint) (pkcs11.ObjectHandle, error) {
-	var err error
+func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, keytype uint) (obj pkcs11.ObjectHandle, err error) {
 	var handles []pkcs11.ObjectHandle
 	var template []*pkcs11.Attribute
 	if keyclass != ^uint(0) {
@@ -65,7 +64,9 @@ func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, key
 	if err = session.Ctx.FindObjectsInit(session.Handle, template); err != nil {
 		return 0, err
 	}
-	defer session.Ctx.FindObjectsFinal(session.Handle)
+	defer func() {
+		err = session.Ctx.FindObjectsFinal(session.Handle)
+	}()
 	if handles, _, err = session.Ctx.FindObjects(session.Handle, 1); err != nil {
 		return 0, err
 	}

@@ -69,8 +69,18 @@ func newSessionPool() *sessionPool {
 }
 
 // Close closes the session.
+//
+// Deprecated: Use CloseSession, which returns any underlying errors.
 func (session *PKCS11Session) Close() {
-	session.Ctx.CloseSession(session.Handle)
+	// TODO - when next making breaking changes, kill this method (or fix it)
+
+	// Assign error to "_", to indicate we are knowingly ignoring it
+	_ = session.Ctx.CloseSession(session.Handle)
+}
+
+// CloseSession closes the session.
+func (session *PKCS11Session) CloseSession() error {
+	return session.Ctx.CloseSession(session.Handle)
 }
 
 // Get returns requested resource pool by slot id
@@ -176,9 +186,14 @@ func loginToken(s *PKCS11Session) error {
 			return nil
 		}
 		log.Printf("Failed to open PKCS#11 Session: %s", err.Error())
-		s.Close()
-		return err
 
+		closeErr := s.CloseSession()
+		if closeErr != nil {
+			log.Printf("Failed to close session: %s", closeErr.Error())
+		}
+
+		// Return the first error we encountered
+		return err
 	}
 	return nil
 }
