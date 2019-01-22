@@ -24,14 +24,16 @@ package crypto11
 import (
 	"bytes"
 	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 	"hash"
 	"testing"
 )
 
 func TestHmac(t *testing.T) {
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	var info pkcs11.Info
-	var err error
 	if info, err = instance.ctx.GetInfo(); err != nil {
 		t.Errorf("GetInfo: %v", err)
 		return
@@ -48,7 +50,7 @@ func TestHmac(t *testing.T) {
 	t.Run("HMACSHA256", func(t *testing.T) {
 		testHmac(t, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
 	})
-	Close()
+	require.NoError(t, Close())
 }
 
 func testHmac(t *testing.T, keytype int, mech int, length int, xlength int, full bool) {

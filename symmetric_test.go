@@ -26,17 +26,20 @@ import (
 	"crypto"
 	"crypto/cipher"
 	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 	"runtime"
 	"testing"
 )
 
 func TestHardSymmetric(t *testing.T) {
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	t.Run("AES128", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 128) })
 	t.Run("AES192", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 192) })
 	t.Run("AES256", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 256) })
 	t.Run("DES3", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_DES3, 0) })
-	Close()
+	require.NoError(t, Close())
 }
 
 func testHardSymmetric(t *testing.T, keytype int, bits int) {
@@ -254,8 +257,9 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 }
 
 func BenchmarkCBC(b *testing.B) {
-	ConfigureFromFile("config")
-	var err error
+	_, err := ConfigureFromFile("config")
+	require.NoError(b, err)
+
 	var key *PKCS11SecretKey
 	if key, err = GenerateSecretKey(128, Ciphers[pkcs11.CKK_AES]); err != nil {
 		b.Errorf("crypto11.GenerateSecretKey: %v", err)
@@ -290,7 +294,7 @@ func BenchmarkCBC(b *testing.B) {
 		}
 		runtime.GC()
 	})
-	Close()
+	require.NoError(b, Close())
 }
 
 // TODO BenchmarkGCM along the same lines as above

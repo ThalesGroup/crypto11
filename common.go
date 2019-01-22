@@ -72,7 +72,7 @@ func (sig *dsaSignature) marshalDER() ([]byte, error) {
 	return asn1.Marshal(*sig)
 }
 
-// Compute *DSA signature and marshal the result in DER fform
+// Compute *DSA signature and marshal the result in DER form
 func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byte) ([]byte, error) {
 	var err error
 	var sigBytes []byte
@@ -88,7 +88,11 @@ func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byt
 	if err != nil {
 		return nil, err
 	}
-	sig.unmarshalBytes(sigBytes)
+	err = sig.unmarshalBytes(sigBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	return sig.marshalDER()
 }
 

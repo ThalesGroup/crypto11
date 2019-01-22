@@ -285,13 +285,16 @@ func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
 // Note that if CRYPTO11_CONFIG_PATH is set in the environment,
 // configuration will be read from that file, overriding any later
 // runtime configuration.
-func ConfigureFromFile(configLocation string) (*pkcs11.Ctx, error) {
+func ConfigureFromFile(configLocation string) (ctx *pkcs11.Ctx, err error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
 		log.Printf("Could not open config file: %s", configLocation)
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		err = file.Close()
+	}()
+
 	configDecoder := json.NewDecoder(file)
 	config := &PKCS11Config{}
 	err = configDecoder.Decode(config)

@@ -214,7 +214,11 @@ func (hi *hmacImplementation) Sum(b []byte) []byte {
 
 func (hi *hmacImplementation) Reset() {
 	hi.Sum(nil) // Clean up
-	hi.initialize()
+
+	// Assign the error to "_" to indicate we are knowingly ignoring this. It may have been
+	// sensible to panic at this stage, but we cannot add a panic without breaking backwards
+	// compatibility.
+	_ = hi.initialize()
 }
 
 func (hi *hmacImplementation) Size() int {

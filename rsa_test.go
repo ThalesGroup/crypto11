@@ -31,15 +31,17 @@ import (
 	_ "crypto/sha512"
 	"fmt"
 	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 var rsaSizes = []int{1024, 2048}
 
 func TestNativeRSA(t *testing.T) {
-	var err error
 	var key *rsa.PrivateKey
-	ConfigureFromFile("config")
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	for _, nbits := range rsaSizes {
 		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
 			t.Run("Generate", func(t *testing.T) {
@@ -56,15 +58,18 @@ func TestNativeRSA(t *testing.T) {
 			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, ^uint(0)) })
 		})
 	}
-	Close()
+
+	require.NoError(t, Close())
 }
 
 func TestHardRSA(t *testing.T) {
-	var err error
 	var key *PKCS11PrivateKeyRSA
 	var key2, key3 crypto.PrivateKey
 	var id, label []byte
-	ConfigureFromFile("config")
+
+	_, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
 	for _, nbits := range rsaSizes {
 		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
 			t.Run("Generate", func(t *testing.T) {
@@ -114,7 +119,7 @@ func TestHardRSA(t *testing.T) {
 			})
 		})
 	}
-	Close()
+	require.NoError(t, Close())
 }
 
 func testRsaSigning(t *testing.T, key crypto.Signer, nbits int, slot uint) {
