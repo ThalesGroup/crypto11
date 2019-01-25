@@ -65,7 +65,10 @@ func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, key
 		return 0, err
 	}
 	defer func() {
-		err = session.Ctx.FindObjectsFinal(session.Handle)
+		finalErr := session.Ctx.FindObjectsFinal(session.Handle)
+		if err == nil {
+			err = finalErr
+		}
 	}()
 	if handles, _, err = session.Ctx.FindObjects(session.Handle, 1); err != nil {
 		return 0, err
