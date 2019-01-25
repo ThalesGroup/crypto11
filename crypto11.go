@@ -292,7 +292,10 @@ func ConfigureFromFile(configLocation string) (ctx *pkcs11.Ctx, err error) {
 		return nil, err
 	}
 	defer func() {
-		err = file.Close()
+		closeErr := file.Close()
+		if closeErr != nil && err == nil {
+			err = closeErr
+		}
 	}()
 
 	configDecoder := json.NewDecoder(file)
