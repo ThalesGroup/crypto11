@@ -293,7 +293,7 @@ func ConfigureFromFile(configLocation string) (ctx *pkcs11.Ctx, err error) {
 	}
 	defer func() {
 		closeErr := file.Close()
-		if closeErr != nil && err == nil {
+		if err == nil {
 			err = closeErr
 		}
 	}()
