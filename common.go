@@ -3,12 +3,12 @@ package crypto11
 import (
 	"C"
 	"encoding/asn1"
-	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"unsafe"
 
-	pkcs11 "github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11"
 )
 
 // ErrMalformedDER represents a failure to decode an ASN.1-encoded message
@@ -18,6 +18,8 @@ var ErrMalformedDER = errors.New("crypto11: malformed DER message")
 // means the PKCS#11 library has returned an empty or odd-length byte
 // string.
 var ErrMalformedSignature = errors.New("crypto11xo: malformed signature")
+
+const labelLength = 64
 
 func ulongToBytes(n uint) []byte {
 	return C.GoBytes(unsafe.Pointer(&n), C.sizeof_ulong) // ugh!
@@ -98,8 +100,7 @@ func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byt
 
 // Pick a random label for a key
 func generateKeyLabel() ([]byte, error) {
-	const labelSize = 32
-	rawLabel := make([]byte, labelSize)
+	rawLabel := make([]byte, labelLength / 2)
 	var rand PKCS11RandReader
 	sz, err := rand.Read(rawLabel)
 	if err != nil {
@@ -108,7 +109,7 @@ func generateKeyLabel() ([]byte, error) {
 	if sz < len(rawLabel) {
 		return nil, ErrCannotGetRandomData
 	}
-	label := make([]byte, 2*labelSize)
-	base64.URLEncoding.Encode(label, rawLabel)
+	label := make([]byte, labelLength)
+	hex.Encode(label, rawLabel)
 	return label, nil
 }
