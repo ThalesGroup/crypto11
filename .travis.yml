@@ -10,11 +10,8 @@ go:
 env:
  - GO111MODULE=on
 
-# trusty only has softhsmv1
-before_script:
+install:
  - sudo add-apt-repository -y ppa:pkg-opendnssec/ppa && sudo apt-get update && sudo apt-get install softhsm2
-
-script:
  - echo directories.tokendir = `pwd`/tokens > softhsm2.conf
  - echo objecstore.backend = file >> softhsm2.conf
  - cat softhsm2.conf
@@ -22,4 +19,6 @@ script:
  - export SOFTHSM2_CONF=`pwd`/softhsm2.conf
  - softhsm2-util --init-token --slot 0 --label test --so-pin sopassword --pin password
  - cp configs/config.softhsm2 config
+
+script:
  - go test -mod=readonly -v -bench .
