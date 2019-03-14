@@ -21,4 +21,6 @@ install:
  - cp configs/config.softhsm2 config
 
 script:
+ # Call go mod download to workaround https://github.com/golang/go/issues/26794
+ - go mod download
  - go test -mod=readonly -v -bench .
