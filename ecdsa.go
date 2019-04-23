@@ -222,35 +222,25 @@ func exportECDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle)
 // Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
 func GenerateECDSAKeyPair(c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
-	return GenerateECDSAKeyPairOnSlot(instance.slot, nil, nil, c)
-}
-
-// GenerateECDSAKeyPairOnSlot creates an ECDSA private key using curve c, on a specified slot.
-//
-// label and/or id can be nil, in which case random values will be generated.
-//
-// Only a limited set of named elliptic curves are supported. The
-// underlying PKCS#11 implementation may impose further restrictions.
-func GenerateECDSAKeyPairOnSlot(slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	var k *PKCS11PrivateKeyECDSA
 	var err error
-	if err = ensureSessions(instance, slot); err != nil {
+	if err = ensureSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		k, err = GenerateECDSAKeyPairOnSession(session, slot, id, label, c)
+	err = withSession(instance.slot, func(session *PKCS11Session) error {
+		k, err = generateECDSAKeyPairOnSession(session, instance.slot, nil, nil, c)
 		return err
 	})
 	return k, err
 }
 
-// GenerateECDSAKeyPairOnSession creates an ECDSA private key using curve c, using a specified session.
+// generateECDSAKeyPairOnSession creates an ECDSA private key using curve c, using a specified session.
 //
 // label and/or id can be nil, in which case random values will be generated.
 //
 // Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func GenerateECDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+func generateECDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
 	var err error
 	var parameters []byte
 	var pub crypto.PublicKey

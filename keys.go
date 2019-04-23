@@ -24,7 +24,7 @@ package crypto11
 import (
 	"crypto"
 
-	pkcs11 "github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11"
 )
 
 // Identify returns the ID and label for a PKCS#11 object.
@@ -83,29 +83,22 @@ func findKey(session *PKCS11Session, id []byte, label []byte, keyclass uint, key
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func FindKeyPair(id []byte, label []byte) (crypto.PrivateKey, error) {
-	return FindKeyPairOnSlot(instance.slot, id, label)
-}
-
-// FindKeyPairOnSlot retrieves a previously created asymmetric key, using a specified slot.
-//
-// Either (but not both) of id and label may be nil, in which case they are ignored.
-func FindKeyPairOnSlot(slot uint, id []byte, label []byte) (crypto.PrivateKey, error) {
 	var err error
 	var k crypto.PrivateKey
-	if err = ensureSessions(instance, slot); err != nil {
+	if err = ensureSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		k, err = FindKeyPairOnSession(session, slot, id, label)
+	err = withSession(instance.slot, func(session *PKCS11Session) error {
+		k, err = findKeyPairOnSession(session, instance.slot, id, label)
 		return err
 	})
 	return k, err
 }
 
-// FindKeyPairOnSession retrieves a previously created asymmetric key, using a specified session.
+// findKeyPairOnSession retrieves a previously created asymmetric key, using a specified session.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
-func FindKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte) (crypto.PrivateKey, error) {
+func findKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte) (crypto.PrivateKey, error) {
 	var err error
 	var privHandle, pubHandle pkcs11.ObjectHandle
 	var pub crypto.PublicKey
@@ -157,29 +150,22 @@ func (signer PKCS11PrivateKey) Public() crypto.PublicKey {
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func FindKey(id []byte, label []byte) (*PKCS11SecretKey, error) {
-	return FindKeyOnSlot(instance.slot, id, label)
-}
-
-// FindKeyOnSlot retrieves a previously created symmetric key, using a specified slot.
-//
-// Either (but not both) of id and label may be nil, in which case they are ignored.
-func FindKeyOnSlot(slot uint, id []byte, label []byte) (*PKCS11SecretKey, error) {
 	var err error
 	var k *PKCS11SecretKey
-	if err = ensureSessions(instance, slot); err != nil {
+	if err = ensureSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		k, err = FindKeyOnSession(session, slot, id, label)
+	err = withSession(instance.slot, func(session *PKCS11Session) error {
+		k, err = findKeyOnSession(session, instance.slot, id, label)
 		return err
 	})
 	return k, err
 }
 
-// FindKeyOnSession retrieves a previously created symmetric key, using a specified session.
+// findKeyOnSession retrieves a previously created symmetric key, using a specified session.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
-func FindKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte) (key *PKCS11SecretKey, err error) {
+func findKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte) (key *PKCS11SecretKey, err error) {
 	var privHandle pkcs11.ObjectHandle
 	if privHandle, err = findKey(session, id, label, pkcs11.CKO_SECRET_KEY, ^uint(0)); err != nil {
 		return

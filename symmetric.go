@@ -256,30 +256,23 @@ type PKCS11SecretKey struct {
 //
 // The key will have a random label and ID.
 func GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
-	return GenerateSecretKeyOnSlot(instance.slot, nil, nil, bits, cipher)
-}
-
-// GenerateSecretKeyOnSlot creates as symmetric key on a specified slot
-//
-// Either or both label and/or id can be nil, in which case random values will be generated.
-func GenerateSecretKeyOnSlot(slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
 	var k *PKCS11SecretKey
 	var err error
-	if err = ensureSessions(instance, slot); err != nil {
+	if err = ensureSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		k, err = GenerateSecretKeyOnSession(session, slot, id, label, bits, cipher)
+	err = withSession(instance.slot, func(session *PKCS11Session) error {
+		k, err = generateSecretKeyOnSession(session, instance.slot, nil, nil, bits, cipher)
 		return err
 	})
 	return k, err
 }
 
-// GenerateSecretKeyOnSession creates a symmetric key of given type and
+// generateSecretKeyOnSession creates a symmetric key of given type and
 // length, on a specified session.
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
-func GenerateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (key *PKCS11SecretKey, err error) {
+func generateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (key *PKCS11SecretKey, err error) {
 	// TODO refactor with the other key generation implementations
 	if label == nil {
 		if label, err = generateKeyLabel(); err != nil {

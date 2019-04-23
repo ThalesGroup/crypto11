@@ -67,29 +67,22 @@ func exportDSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (
 //
 // The key will have a random label and ID.
 func GenerateDSAKeyPair(params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
-	return GenerateDSAKeyPairOnSlot(instance.slot, nil, nil, params)
-}
-
-// GenerateDSAKeyPairOnSlot creates a DSA private key on a specified slot
-//
-// Either or both label and/or id can be nil, in which case random values will be generated.
-func GenerateDSAKeyPairOnSlot(slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 	var k *PKCS11PrivateKeyDSA
 	var err error
-	if err = ensureSessions(instance, slot); err != nil {
+	if err = ensureSessions(instance, instance.slot); err != nil {
 		return nil, err
 	}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		k, err = GenerateDSAKeyPairOnSession(session, slot, id, label, params)
+	err = withSession(instance.slot, func(session *PKCS11Session) error {
+		k, err = generateDSAKeyPairOnSession(session, instance.slot, nil, nil, params)
 		return err
 	})
 	return k, err
 }
 
-// GenerateDSAKeyPairOnSession creates a DSA private key using a specified session
+// generateDSAKeyPairOnSession creates a DSA private key using a specified session
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
-func GenerateDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+func generateDSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
 	var err error
 	var pub crypto.PublicKey
 
