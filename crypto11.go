@@ -111,6 +111,9 @@ var ErrCannotGetRandomData = errors.New("crypto11: cannot get random data from P
 // ErrUnsupportedKeyType is returned when the PKCS#11 library returns a key type that isn't supported
 var ErrUnsupportedKeyType = errors.New("crypto11: unrecognized key type")
 
+// ErrClosed is returned if a Context is used after a call to Close.
+var ErrClosed = errors.New("crypto11: cannot used closed Context")
+
 // pkcs11Object contains a reference to a loaded PKCS#11 object.
 type pkcs11Object struct {
 	// TODO - handle resource cleanup. Consider adding explicit Close method and/or use a finalizer
@@ -147,6 +150,10 @@ type Context struct {
 	token *pkcs11.TokenInfo
 	slot  uint
 	pool  *pools.ResourcePool
+
+	// persistentSession is a session held open so we can be confident handles and login status
+	// persist for the duration of this context
+	persistentSession pkcs11.SessionHandle
 }
 
 // findToken finds a token given its serial number
@@ -250,6 +257,17 @@ func Configure(config *PKCS11Config) (*Context, error) {
 	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, config.MaxSessions,
 		config.MaxSessions, config.IdleTimeout)
 
+	// Create a long-term session and log it in. This session won't be used by callers, instead it is used to keep
+	// a connection alive to the token to ensure object handles and the log in status remain accessible.
+	instance.persistentSession, err = instance.ctx.OpenSession(instance.slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "crypto11: failed to create long term session")
+	}
+	err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "crypto11: failed to log into long term session")
+	}
+
 	return instance, nil
 }
 
@@ -291,6 +309,10 @@ func (c *Context) Close() error {
 
 	// Blocks until all resources returned to pool
 	c.pool.Close()
+
+	// Close our long-term session. We ignore any returned error,
+	// since we plan to kill our collection to the library anyway.
+	_ = c.ctx.CloseSession(c.persistentSession)
 
 	err := c.ctx.Finalize()
 	if err != nil {

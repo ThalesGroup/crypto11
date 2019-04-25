@@ -41,34 +41,15 @@ func (s pkcs11Session) Close() {
 	_ = s.ctx.CloseSession(s.handle)
 }
 
-// withSession executes a function with a session. If the function returns pkcs11.CKR_USER_NOT_LOGGED_IN,
-// the user is logged in and the function is called for a second time.
+// withSession executes a function with a session.
 func (c *Context) withSession(f func(session *pkcs11Session) error) error {
-
 	session, err := c.getSession()
 	if err != nil {
 		return err
 	}
 	defer c.pool.Put(session)
 
-	err = f(session)
-	if err != nil {
-		// if a request required login, then try to login
-		if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
-			if err = c.ctx.Login(session.handle, pkcs11.CKU_USER, c.cfg.Pin); err != nil {
-				// Another thread may have successfully logged in
-				if perr2, ok := err.(pkcs11.Error); !ok || perr2 != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
-					return err
-				}
-			}
-			// retry after login
-			return f(session)
-		}
-
-		return err
-	}
-
-	return nil
+	return f(session)
 }
 
 // getSession retrieves a session from the pool, respecting the timeout defined in the Context config.
@@ -83,6 +64,10 @@ func (c *Context) getSession() (*pkcs11Session, error) {
 	}
 
 	resource, err := c.pool.Get(ctx)
+	if err == pools.ErrClosed {
+		// Our Context must have been closed, return a nicer error
+		return nil, ErrClosed
+	}
 	if err != nil {
 		return nil, err
 	}
