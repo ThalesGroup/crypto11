@@ -1,4 +1,4 @@
-// Copyright 2016, 2017 Thales e-Security, Inc
+// Copyright 2016 Thales e-Security, Inc
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -27,7 +27,8 @@
 // define a configuration in your application (see PKCS11Config and
 // Configure). This will identify the PKCS#11 library and token to
 // use, and contain the password (or "PIN" in PKCS#11 terminology) to
-// use if the token requires login.
+// use. A Context is returned, which is then used to invoke operations
+// on the PKCS#11 token.
 //
 // 2. Create keys with GenerateDSAKeyPair, GenerateRSAKeyPair and
 // GenerateECDSAKeyPair. The keys you get back implement the standard
@@ -35,34 +36,42 @@
 // are automatically persisted under random a randomly generated label
 // and ID (use the Identify method to discover them).
 //
-// 3. Retrieve existing keys with FindKeyPair. The return value is a
+// 3. Retrieve existing keys with FindKeyPair. The returned value is a
 // Go crypto.PrivateKey; it may be converted either to crypto.Signer
 // or to *PKCS11PrivateKeyDSA, *PKCS11PrivateKeyECDSA or
 // *PKCS11PrivateKeyRSA.
 //
 // Sessions and concurrency
 //
-// Note that PKCS#11 session handles must not be used concurrently
+// // Note that PKCS#11 session handles must not be used concurrently
 // from multiple threads. Consumers of the Signer interface know
 // nothing of this and expect to be able to sign from multiple threads
 // without constraint. We address this as follows.
 //
-// 1. pkcs11Object captures both the object handle and the slot ID
-// for an object.
+// 1. When a Context is created, a session is created and the user is
+// logged in. This session remains open until the Context is closed,
+// to ensure all object handles remain valid and to avoid repeatedly
+// calling C_Login.
 //
-// 2. For each slot we maintain a pool of read-write sessions. The
-// pool expands dynamically up to an (undocumented) limit.
+// 2. The Context maintains a pool of read-write sessions. The pool expands
+// dynamically as needed, but never beyond the maximum number of r/w sessions
+// supported by the token as reported by C_GetInfo. If other applications
+// are using the token, a lower limit should be set (see below).
 //
 // 3. Each operation transiently takes a session from the pool. They
 // have exclusive use of the session, meeting PKCS#11's concurrency
-// requirements.
+// requirements. Sessions are returned to the pool afterwards and may
+// be re-used.
 //
-// The details are, partially, exposed in the API; since the target
-// use case is PKCS#11-unaware operation it may be that the API as it
-// stands isn't good enough for PKCS#11-aware applications. Feedback
-// welcome.
+// Behaviour of the pool can be tweaked via configuration options:
 //
-// See also https://golang.org/pkg/crypto/
+// - PoolWaitTimeout controls how long an operation can block waiting on a
+// session from the pool. A zero value means there is no limit. Timeouts only
+// occur if the pool is full and additional operations are requested.
+//
+// - MaxSessions sets an upper bound on the number of sessions. If this value is zero,
+// a default maximum is used (see DefaultMaxSessions). In every case the maximum
+// supported sessions as reported by the token is obeyed.
 //
 // Limitations
 //
@@ -80,7 +89,6 @@ package crypto11
 import (
 	"crypto"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -180,43 +188,26 @@ func (c *Context) findToken(slots []uint, serial string, label string) (uint, *p
 //
 // Supply this to Configure(), or alternatively use ConfigureFromFile().
 type PKCS11Config struct {
-	// Full path to PKCS#11 library
+	// Full path to PKCS#11 library.
 	Path string
 
-	// Token serial number
+	// Token serial number.
 	TokenSerial string
 
-	// Token label
+	// Token label.
 	TokenLabel string
 
-	// User PIN (password)
+	// User PIN (password).
 	Pin string
 
-	// Maximum number of concurrent sessions to open
+	// Maximum number of concurrent sessions to open. If zero, DefaultMaxSessions is used.
 	MaxSessions int
 
-	// Session idle timeout to be evicted from the pool
-	IdleTimeout time.Duration
-
-	// Maximum time allowed to wait a sessions pool for a session
+	// Maximum time to wait for a session from the sessions pool. Zero means wait indefinitely.
 	PoolWaitTimeout time.Duration
 }
 
-// Configure configures PKCS#11 from a PKCS11Config.
-//
-// The PKCS#11 library context is returned,
-// allowing a PKCS#11-aware application to make use of it. Non-aware
-// appliations may ignore it.
-//
-// Unsually, these values may be present even if the error is
-// non-nil. This corresponds to the case that the library has already
-// been configured. Note that it is NOT reconfigured so if you supply
-// a different configuration the second time, it will be ignored in
-// favor of the first configuration.
-//
-// If config is nil, and the library has already been configured, the
-// context from the first configuration is returned (and
-// the error will be nil in this case).
+// Configure creates a new Context based on the supplied PKCS#11 configuration.
 func Configure(config *PKCS11Config) (*Context, error) {
 	if config.MaxSessions == 0 {
 		config.MaxSessions = DefaultMaxSessions
@@ -247,15 +238,19 @@ func Configure(config *PKCS11Config) (*Context, error) {
 		return nil, err
 	}
 
-	// TODO - why is this an error condition? 'Max' implies an upperbound, not a requirement. We could take the
-	// smaller of these two values.
-	if instance.token.MaxRwSessionCount > 0 && uint(instance.cfg.MaxSessions) > instance.token.MaxRwSessionCount {
-		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)",
-			instance.cfg.MaxSessions, instance.token.MaxRwSessionCount)
+	// Create the session pool.
+	// TODO - remove these when https://github.com/miekg/pkcs11/pull/115/ is merged
+	const ckEffectivelyInfinite = 0
+	const ckUnavailableInformation = ^uint(0)
+
+	maxSessions := instance.cfg.MaxSessions
+	tokenMaxSessions := instance.token.MaxRwSessionCount
+	if tokenMaxSessions != ckEffectivelyInfinite && tokenMaxSessions != ckUnavailableInformation {
+		maxSessions = min(maxSessions, castDown(tokenMaxSessions))
 	}
 
-	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, config.MaxSessions,
-		config.MaxSessions, config.IdleTimeout)
+	// We will use one session to keep state alive, so the pool gets maxSessions - 1
+	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0)
 
 	// Create a long-term session and log it in. This session won't be used by callers, instead it is used to keep
 	// a connection alive to the token to ensure object handles and the log in status remain accessible.
@@ -271,10 +266,30 @@ func Configure(config *PKCS11Config) (*Context, error) {
 	return instance, nil
 }
 
-// ConfigureFromFile configures PKCS#11 from a name configuration file.
-//
-// Configuration files are a JSON representation of the PKCSConfig object.
-// The return value is as for Configure().
+func min(a, b int) int {
+	if b < a {
+		return b
+	}
+	return a
+}
+
+// castDown returns orig as a signed integer. If an overflow would have occurred,
+// the maximum possible value is returned.
+func castDown(orig uint) int {
+	// From https://stackoverflow.com/a/6878625/474189
+	const maxUint = ^uint(0)
+	const maxInt = int(maxUint >> 1)
+
+	if orig > uint(maxInt) {
+		return maxInt
+	}
+
+	return int(orig)
+}
+
+// ConfigureFromFile is a convenience method, which parses the configuration file
+// and calls Configure. The configuration file should be a JSON representation
+// of a PKCS11Config object.
 func ConfigureFromFile(configLocation string) (*Context, error) {
 	config, err := loadConfigFromFile(configLocation)
 	if err != nil {
@@ -303,11 +318,11 @@ func loadConfigFromFile(configLocation string) (*PKCS11Config, error) {
 	return config, errors.WithMessage(err, "could decode config file:")
 }
 
-// Close waits for existing operations to finish, before releasing all the resources used by the Context (and unloading
-// the underlying PKCS #11 library). A closed Context cannot be reused.
+// Close releases all the resources used by the Context and unloads the PKCS #11 library. Close blocks until existing
+// operations have finished. A closed Context cannot be reused.
 func (c *Context) Close() error {
 
-	// Blocks until all resources returned to pool
+	// Block until all resources returned to pool
 	c.pool.Close()
 
 	// Close our long-term session. We ignore any returned error,

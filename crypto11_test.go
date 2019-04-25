@@ -28,9 +28,7 @@ import (
 	"log"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/miekg/pkcs11"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,38 +79,6 @@ func TestLoginContext(t *testing.T) {
 		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
 	})
 
-	t.Run("key identity with expiration", func(t *testing.T) {
-
-		config, err := loadConfigFromFile("config")
-		require.NoError(t, err)
-		config.IdleTimeout = time.Second
-
-		ctx, err := Configure(config)
-		require.NoError(t, err)
-
-		defer func() {
-			err = ctx.Close()
-			require.NoError(t, err)
-		}()
-
-		// Generate a key and and close a session
-		const pSize = dsa.L1024N160
-		key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
-		require.NoError(t, err)
-		require.NotNil(t, key)
-
-		id, _, err := key.Identify()
-		require.NoError(t, err)
-
-		// kick out all cfg.Idle sessions
-		time.Sleep(config.IdleTimeout + time.Second)
-
-		key2, err := ctx.FindKeyPair(id, nil)
-		require.NoError(t, err)
-
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
-	})
-
 	t.Run("login context shared between sessions", func(t *testing.T) {
 		ctx, err := configureWithPin(t)
 		require.NoError(t, err)
@@ -142,36 +108,6 @@ func TestLoginContext(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
-}
-
-func TestIdentityExpiration(t *testing.T) {
-	config, err := loadConfigFromFile("config")
-	require.NoError(t, err)
-
-	config.IdleTimeout = time.Second
-
-	ctx, err := Configure(config)
-	require.NoError(t, err)
-
-	defer func() {
-		err = ctx.Close()
-		require.NoError(t, err)
-	}()
-
-	// Generate a key and and close a session
-	const pSize = dsa.L1024N160
-	key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
-	require.NoError(t, err)
-	require.NotNil(t, key)
-
-	// kick out all cfg.Idle sessions
-	time.Sleep(config.IdleTimeout + time.Second)
-
-	if _, _, err = key.Identify(); err != nil {
-		if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
-			t.Fatal("failed to generate a key, unexpected error:", err)
-		}
-	}
 }
 
 func configureWithPin(t *testing.T) (*Context, error) {
