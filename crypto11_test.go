@@ -72,7 +72,7 @@ func TestLoginContext(t *testing.T) {
 		// Reopen a session and try to find a key.
 		// Valid session must enlist a key.
 		// If login is not performed than it will fail.
-		_, err = configureWithPin(t)
+		ctx, err = configureWithPin(t)
 		require.NoError(t, err)
 
 		key2, err := ctx.FindKeyPair(id, nil)
