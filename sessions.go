@@ -49,6 +49,7 @@ func (c *Context) withSession(f func(session *pkcs11Session) error) error {
 	if err != nil {
 		return err
 	}
+	defer c.pool.Put(session)
 
 	err = f(session)
 	if err != nil {
