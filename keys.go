@@ -49,6 +49,8 @@ func (object *pkcs11Object) Identify() (id []byte, label []byte, err error) {
 func findKey(session *pkcs11Session, id []byte, label []byte, keyclass uint, keytype uint) (obj pkcs11.ObjectHandle, err error) {
 	var handles []pkcs11.ObjectHandle
 	var template []*pkcs11.Attribute
+
+	// TODO replace this use of ^uint(0)
 	if keyclass != ^uint(0) {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, keyclass))
 	}
