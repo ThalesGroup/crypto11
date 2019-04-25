@@ -22,12 +22,10 @@
 package crypto11
 
 import (
-	"context"
 	"errors"
-	"fmt"
-	"github.com/miekg/pkcs11"
-	"github.com/youtube/vitess/go/pools"
 	"hash"
+
+	"github.com/miekg/pkcs11"
 )
 
 const (
@@ -58,7 +56,7 @@ const (
 
 type hmacImplementation struct {
 	// PKCS#11 session to use
-	session *PKCS11Session
+	session *pkcs11Session
 
 	// Signing key
 	key *PKCS11SecretKey
@@ -148,28 +146,17 @@ func (key *PKCS11SecretKey) NewHMAC(mech int, length int) (h hash.Hash, err erro
 }
 
 func (hi *hmacImplementation) initialize() (err error) {
-	// TODO refactor with newBlockModeCloser
-	sessionPool := pool.Get(hi.key.Slot)
-	if sessionPool == nil {
-		err = fmt.Errorf("crypto11: no session for slot %d", hi.key.Slot)
-		return
+	session, err := hi.key.context.getSession()
+	if err != nil {
+		return err
 	}
-	ctx := context.Background()
-	if instance.cfg.PoolWaitTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), instance.cfg.PoolWaitTimeout)
-		defer cancel()
-	}
-	var session pools.Resource
-	if session, err = sessionPool.Get(ctx); err != nil {
-		return
-	}
-	hi.session = session.(*PKCS11Session)
+
+	hi.session = session
 	hi.cleanup = func() {
-		sessionPool.Put(session)
+		hi.key.context.pool.Put(session)
 		hi.session = nil
 	}
-	if err = hi.session.Ctx.SignInit(hi.session.Handle, hi.mechDescription, hi.key.Handle); err != nil {
+	if err = hi.session.ctx.SignInit(hi.session.handle, hi.mechDescription, hi.key.handle); err != nil {
 		hi.cleanup()
 		return
 	}
@@ -185,7 +172,7 @@ func (hi *hmacImplementation) Write(p []byte) (n int, err error) {
 		}
 		return
 	}
-	if err = hi.session.Ctx.SignUpdate(hi.session.Handle, p); err != nil {
+	if err = hi.session.ctx.SignUpdate(hi.session.handle, p); err != nil {
 		return
 	}
 	hi.updates++
@@ -199,11 +186,11 @@ func (hi *hmacImplementation) Sum(b []byte) []byte {
 		if hi.updates == 0 {
 			// http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html#_Toc322855304
 			// We must ensure that C_SignUpdate is called _at least once_.
-			if err = hi.session.Ctx.SignUpdate(hi.session.Handle, []byte{}); err != nil {
+			if err = hi.session.ctx.SignUpdate(hi.session.handle, []byte{}); err != nil {
 				panic(err)
 			}
 		}
-		hi.result, err = hi.session.Ctx.SignFinal(hi.session.Handle)
+		hi.result, err = hi.session.ctx.SignFinal(hi.session.handle)
 		hi.cleanup()
 		if err != nil {
 			panic(err)

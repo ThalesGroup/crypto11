@@ -244,7 +244,7 @@ var Ciphers = map[int]*SymmetricCipher{
 // using NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC from this package is
 // much faster.
 type PKCS11SecretKey struct {
-	PKCS11Object
+	pkcs11Object
 
 	// Symmetric cipher information
 	Cipher *SymmetricCipher
@@ -255,14 +255,11 @@ type PKCS11SecretKey struct {
 // GenerateSecretKey creates an secret key of given length and type.
 //
 // The key will have a random label and ID.
-func GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+func (c *Context) GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
 	var k *PKCS11SecretKey
 	var err error
-	if err = ensureSessions(instance, instance.slot); err != nil {
-		return nil, err
-	}
-	err = withSession(instance.slot, func(session *PKCS11Session) error {
-		k, err = generateSecretKeyOnSession(session, instance.slot, nil, nil, bits, cipher)
+	err = c.withSession(func(session *pkcs11Session) error {
+		k, err = c.generateSecretKeyOnSession(session, c.slot, nil, nil, bits, cipher)
 		return err
 	})
 	return k, err
@@ -272,15 +269,15 @@ func GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, err
 // length, on a specified session.
 //
 // Either or both label and/or id can be nil, in which case random values will be generated.
-func generateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (key *PKCS11SecretKey, err error) {
+func (c *Context) generateSecretKeyOnSession(session *pkcs11Session, slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (key *PKCS11SecretKey, err error) {
 	// TODO refactor with the other key generation implementations
 	if label == nil {
-		if label, err = generateKeyLabel(); err != nil {
+		if label, err = c.generateKeyLabel(); err != nil {
 			return nil, err
 		}
 	}
 	if id == nil {
-		if id, err = generateKeyLabel(); err != nil {
+		if id, err = c.generateKeyLabel(); err != nil {
 			return nil, err
 		}
 	}
@@ -306,7 +303,7 @@ func generateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, la
 			secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
 		}
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
-		privHandle, err = session.Ctx.GenerateKey(session.Handle, mech, secretKeyTemplate)
+		privHandle, err = session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
 		if err == nil {
 			break
 		}
@@ -321,6 +318,6 @@ func generateSecretKeyOnSession(session *PKCS11Session, slot uint, id []byte, la
 	if err != nil {
 		return
 	}
-	key = &PKCS11SecretKey{PKCS11Object{privHandle, slot}, cipher}
+	key = &PKCS11SecretKey{pkcs11Object{privHandle, c}, cipher}
 	return
 }

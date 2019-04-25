@@ -47,7 +47,7 @@
 // nothing of this and expect to be able to sign from multiple threads
 // without constraint. We address this as follows.
 //
-// 1. PKCS11Object captures both the object handle and the slot ID
+// 1. pkcs11Object captures both the object handle and the slot ID
 // for an object.
 //
 // 2. For each slot we maintain a pool of read-write sessions. The
@@ -80,13 +80,14 @@ package crypto11
 import (
 	"crypto"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/miekg/pkcs11"
+	"github.com/pkg/errors"
+	"github.com/vitessio/vitess/go/pools"
 )
 
 const (
@@ -101,9 +102,6 @@ var ErrTokenNotFound = errors.New("crypto11: could not find PKCS#11 token")
 // ErrKeyNotFound represents the failure to find the requested PKCS#11 key
 var ErrKeyNotFound = errors.New("crypto11: could not find PKCS#11 key")
 
-// ErrNotConfigured is returned when the PKCS#11 library is not configured
-var ErrNotConfigured = errors.New("crypto11: PKCS#11 not yet configured")
-
 // ErrCannotOpenPKCS11 is returned when the PKCS#11 library cannot be opened
 var ErrCannotOpenPKCS11 = errors.New("crypto11: could not open PKCS#11")
 
@@ -113,53 +111,48 @@ var ErrCannotGetRandomData = errors.New("crypto11: cannot get random data from P
 // ErrUnsupportedKeyType is returned when the PKCS#11 library returns a key type that isn't supported
 var ErrUnsupportedKeyType = errors.New("crypto11: unrecognized key type")
 
-// PKCS11Object contains a reference to a loaded PKCS#11 object.
-type PKCS11Object struct {
-	// The PKCS#11 object handle.
-	Handle pkcs11.ObjectHandle
+// pkcs11Object contains a reference to a loaded PKCS#11 object.
+type pkcs11Object struct {
+	// TODO - handle resource cleanup. Consider adding explicit Close method and/or use a finalizer
 
-	// The PKCS#11 slot number.
-	//
-	// This is used internally to find a session handle that can
+	// The PKCS#11 object handle.
+	handle pkcs11.ObjectHandle
+
+	// The PKCS#11 context. This is used  to find a session handle that can
 	// access this object.
-	Slot uint
+	context *Context
 }
 
-// PKCS11PrivateKey contains a reference to a loaded PKCS#11 private key object.
-type PKCS11PrivateKey struct {
-	PKCS11Object
+// pkcs11PrivateKey contains a reference to a loaded PKCS#11 private key object.
+type pkcs11PrivateKey struct {
+	pkcs11Object
 
 	// The corresponding public key
-	PubKey crypto.PublicKey
+	pubKey crypto.PublicKey
+
+	// In a former design we carried around the object handle for the
+	// public key and retrieved it on demand.  The downside of that is
+	// that the Public() method on Signer &c has no way to communicate
+	// errors.
 }
 
-// In a former design we carried around the object handle for the
-// public key and retrieved it on demand.  The downside of that is
-// that the Public() method on Signer &c has no way to communicate
-// errors.
-
-/* Nasty globals */
-var instance = &libCtx{
-	cfg: &PKCS11Config{
-		MaxSessions:     DefaultMaxSessions,
-		IdleTimeout:     0,
-		PoolWaitTimeout: 0,
-	},
-}
-
-// Represent library pkcs11 context and token configuration
-type libCtx struct {
+// A Context stores the connection state to a PKCS#11 token. Use Configure or ConfigureFromFile to create a new
+// Context. Call Close when finished with the token, to free up resources.
+//
+// All functions, except Close, are safe to call from multiple goroutines.
+type Context struct {
 	ctx *pkcs11.Ctx
 	cfg *PKCS11Config
 
 	token *pkcs11.TokenInfo
 	slot  uint
+	pool  *pools.ResourcePool
 }
 
-// Find a token given its serial number
-func findToken(slots []uint, serial string, label string) (uint, *pkcs11.TokenInfo, error) {
+// findToken finds a token given its serial number
+func (c *Context) findToken(slots []uint, serial string, label string) (uint, *pkcs11.TokenInfo, error) {
 	for _, slot := range slots {
-		tokenInfo, err := instance.ctx.GetTokenInfo(slot)
+		tokenInfo, err := c.ctx.GetTokenInfo(slot)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -217,79 +210,67 @@ type PKCS11Config struct {
 // If config is nil, and the library has already been configured, the
 // context from the first configuration is returned (and
 // the error will be nil in this case).
-func Configure(config *PKCS11Config) (*pkcs11.Ctx, error) {
-	var err error
-	var slots []uint
-
-	if config == nil {
-		if instance.ctx != nil {
-			return instance.ctx, nil
-		}
-		return nil, ErrNotConfigured
-	}
-	if instance.ctx != nil {
-		log.Printf("PKCS#11 library already configured")
-		return instance.ctx, nil
-	}
-
+func Configure(config *PKCS11Config) (*Context, error) {
 	if config.MaxSessions == 0 {
 		config.MaxSessions = DefaultMaxSessions
 	}
-	instance.cfg = config
-	instance.ctx = pkcs11.New(config.Path)
+
+	instance := &Context{
+		cfg: config,
+		ctx: pkcs11.New(config.Path),
+	}
+
 	if instance.ctx == nil {
 		log.Printf("Could not open PKCS#11 library: %s", config.Path)
 		return nil, ErrCannotOpenPKCS11
 	}
-	if err = instance.ctx.Initialize(); err != nil {
+	if err := instance.ctx.Initialize(); err != nil {
 		log.Printf("Failed to initialize PKCS#11 library: %s", err.Error())
 		return nil, err
 	}
-	if slots, err = instance.ctx.GetSlotList(true); err != nil {
+	slots, err := instance.ctx.GetSlotList(true)
+	if err != nil {
 		log.Printf("Failed to list PKCS#11 Slots: %s", err.Error())
 		return nil, err
 	}
 
-	instance.slot, instance.token, err = findToken(slots, config.TokenSerial, config.TokenLabel)
+	instance.slot, instance.token, err = instance.findToken(slots, config.TokenSerial, config.TokenLabel)
 	if err != nil {
 		log.Printf("Failed to find Token in any Slot: %s", err.Error())
 		return nil, err
 	}
 
+	// TODO - why is this an error condition? 'Max' implies an upperbound, not a requirement. We could take the
+	// smaller of these two values.
 	if instance.token.MaxRwSessionCount > 0 && uint(instance.cfg.MaxSessions) > instance.token.MaxRwSessionCount {
-		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)", instance.cfg.MaxSessions, instance.token.MaxRwSessionCount)
+		return nil, fmt.Errorf("crypto11: provided max sessions value (%d) exceeds max value the token supports (%d)",
+			instance.cfg.MaxSessions, instance.token.MaxRwSessionCount)
 	}
 
-	if err := setupSessions(instance, instance.slot); err != nil {
-		return nil, err
-	}
+	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, config.MaxSessions,
+		config.MaxSessions, config.IdleTimeout)
 
-	// login required if a pool evict idle sessions (handled by the pool) or
-	// for the first connection in the pool (handled here)
-	if instance.cfg.IdleTimeout == 0 {
-		if instance.token.Flags&pkcs11.CKF_LOGIN_REQUIRED != 0 && instance.cfg.Pin != "" {
-			if err = withSession(instance.slot, loginToken); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return instance.ctx, nil
+	return instance, nil
 }
 
 // ConfigureFromFile configures PKCS#11 from a name configuration file.
 //
 // Configuration files are a JSON representation of the PKCSConfig object.
 // The return value is as for Configure().
-//
-// Note that if CRYPTO11_CONFIG_PATH is set in the environment,
-// configuration will be read from that file, overriding any later
-// runtime configuration.
-func ConfigureFromFile(configLocation string) (ctx *pkcs11.Ctx, err error) {
+func ConfigureFromFile(configLocation string) (*Context, error) {
+	config, err := loadConfigFromFile(configLocation)
+	if err != nil {
+		return nil, err
+	}
+
+	return Configure(config)
+}
+
+// loadConfigFromFile reads a PKCS11Config struct from a file.
+func loadConfigFromFile(configLocation string) (*PKCS11Config, error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
-		log.Printf("Could not open config file: %s", configLocation)
-		return nil, err
+		return nil, errors.WithMessagef(err, "could not open config file: %s", configLocation)
 	}
 	defer func() {
 		closeErr := file.Close()
@@ -301,48 +282,21 @@ func ConfigureFromFile(configLocation string) (ctx *pkcs11.Ctx, err error) {
 	configDecoder := json.NewDecoder(file)
 	config := &PKCS11Config{}
 	err = configDecoder.Decode(config)
+	return config, errors.WithMessage(err, "could decode config file:")
+}
+
+// Close waits for existing operations to finish, before releasing all the resources used by the Context (and unloading
+// the underlying PKCS #11 library). A closed Context cannot be reused.
+func (c *Context) Close() error {
+
+	// Blocks until all resources returned to pool
+	c.pool.Close()
+
+	err := c.ctx.Finalize()
 	if err != nil {
-		log.Printf("Could decode config file: %s", err.Error())
-		return nil, err
-	}
-	return Configure(config)
-}
-
-// Close releases all sessions and uninitializes library default handle.
-// Once library handle is released, library may be configured once again.
-func Close() error {
-	ctx := instance.ctx
-	if ctx != nil {
-		slots, err := ctx.GetSlotList(true)
-		if err != nil {
-			return err
-		}
-
-		for _, slot := range slots {
-			if err := pool.closeSessions(slot); err != nil && err != errPoolNotFound {
-				return err
-			}
-			// if something by passed cache
-			if err := ctx.CloseAllSessions(slot); err != nil {
-				return err
-			}
-		}
-
-		if err := ctx.Finalize(); err != nil {
-			return err
-		}
-
-		ctx.Destroy()
-		instance.ctx = nil
+		return err
 	}
 
+	c.ctx.Destroy()
 	return nil
-}
-
-func init() {
-	if configLocation, ok := os.LookupEnv("CRYPTO11_CONFIG_PATH"); ok {
-		if _, err := ConfigureFromFile(configLocation); err != nil {
-			panic(err)
-		}
-	}
 }

@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"fmt"
+
 	"github.com/miekg/pkcs11"
 )
 
@@ -41,12 +42,12 @@ func (key *PKCS11SecretKey) BlockSize() int {
 // For more efficient operation, see NewCBCDecrypterCloser, NewCBCDecrypter or NewCBC.
 func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
 	var result []byte
-	if err := withSession(key.Slot, func(session *PKCS11Session) (err error) {
+	if err := key.context.withSession(func(session *pkcs11Session) (err error) {
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.ECBMech, nil)}
-		if err = session.Ctx.DecryptInit(session.Handle, mech, key.Handle); err != nil {
+		if err = session.ctx.DecryptInit(session.handle, mech, key.handle); err != nil {
 			return
 		}
-		if result, err = session.Ctx.Decrypt(session.Handle, src[:key.Cipher.BlockSize]); err != nil {
+		if result, err = session.ctx.Decrypt(session.handle, src[:key.Cipher.BlockSize]); err != nil {
 			return
 		}
 		if len(result) != key.Cipher.BlockSize {
@@ -69,12 +70,12 @@ func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
 // For more efficient operation, see NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC.
 func (key *PKCS11SecretKey) Encrypt(dst, src []byte) {
 	var result []byte
-	if err := withSession(key.Slot, func(session *PKCS11Session) (err error) {
+	if err := key.context.withSession(func(session *pkcs11Session) (err error) {
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.ECBMech, nil)}
-		if err = session.Ctx.EncryptInit(session.Handle, mech, key.Handle); err != nil {
+		if err = session.ctx.EncryptInit(session.handle, mech, key.handle); err != nil {
 			return
 		}
-		if result, err = session.Ctx.Encrypt(session.Handle, src[:key.Cipher.BlockSize]); err != nil {
+		if result, err = session.ctx.Encrypt(session.handle, src[:key.Cipher.BlockSize]); err != nil {
 			return
 		}
 		if len(result) != key.Cipher.BlockSize {

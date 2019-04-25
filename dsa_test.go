@@ -28,10 +28,11 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"github.com/stretchr/testify/require"
 	"io"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // Use pre-cooked groups, making new ones is too slow and doesn't test
@@ -100,39 +101,33 @@ func TestNativeDSA(t *testing.T) {
 }
 
 func TestHardDSA(t *testing.T) {
-	var key *PKCS11PrivateKeyDSA
-	var key2, key3 crypto.PrivateKey
-	var id, label []byte
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
-	for psize, params := range dsaSizes {
-		if key, err = GenerateDSAKeyPair(params); err != nil {
-			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-			return
-		}
-		testDsaSigning(t, key, psize, "hard1")
+	defer func() {
+		err = ctx.Close()
+		require.NoError(t, err)
+	}()
+
+	for pSize, params := range dsaSizes {
+
+		key, err := ctx.GenerateDSAKeyPair(params)
+		require.NoError(t, err)
+		require.NotNil(t, key)
+		testDsaSigning(t, key, pSize, "hard1")
+
 		// Get a fresh handle to  the key
-		if id, label, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
-			return
-		}
-		if key2, err = FindKeyPair(id, nil); err != nil {
-			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
-			return
-		}
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, "hard2")
-		if key3, err = FindKeyPair(nil, label); err != nil {
-			t.Errorf("crypto11.dsa.FindKeyPair by label: %v", err)
-			return
-		}
-		testDsaSigning(t, key3.(crypto.Signer), psize, "hard3")
+		id, label, err := key.Identify()
+		require.NoError(t, err)
+
+		key2, err := ctx.FindKeyPair(id, nil)
+		require.NoError(t, err)
+		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, "hard2")
+
+		key3, err := ctx.FindKeyPair(nil, label)
+		require.NoError(t, err)
+		testDsaSigning(t, key3.(crypto.Signer), pSize, "hard3")
 	}
-	require.NoError(t, Close())
 }
 
 func testDsaSigning(t *testing.T, key crypto.Signer, psize dsa.ParameterSizes, what string) {
@@ -144,9 +139,6 @@ func testDsaSigning(t *testing.T, key crypto.Signer, psize dsa.ParameterSizes, w
 }
 
 func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, psize dsa.ParameterSizes, what string) {
-	var err error
-	var sigDER []byte
-	var sig dsaSignature
 
 	plaintext := []byte("sign me with DSA")
 	h := hashFunction.New()
@@ -155,14 +147,14 @@ func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto
 	// crypto.dsa.Sign doesn't truncate the hash!
 	qbytes := (dsaSizes[psize].Q.BitLen() + 7) / 8
 	plaintextHash = plaintextHash[:qbytes]
-	if sigDER, err = key.Sign(rand.Reader, plaintextHash, hashFunction); err != nil {
-		t.Errorf("DSA %s Sign (hash %v): %v", what, hashFunction, err)
-		return
-	}
-	if err = sig.unmarshalDER(sigDER); err != nil {
-		t.Errorf("DSA %s unmarshalDER (hash %v): %v", what, hashFunction, err)
-		return
-	}
+
+	sigDER, err := key.Sign(rand.Reader, plaintextHash, hashFunction)
+	require.NoError(t, err)
+
+	var sig dsaSignature
+	err = sig.unmarshalDER(sigDER)
+	require.NoError(t, err)
+
 	dsaPubkey := key.Public().(crypto.PublicKey).(*dsa.PublicKey)
 	if !dsa.Verify(dsaPubkey, plaintextHash, sig.R, sig.S) {
 		t.Errorf("DSA %s Verify failed (psize %d hash %v)", what, psize, hashFunction)

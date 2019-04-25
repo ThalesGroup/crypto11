@@ -25,6 +25,7 @@ import (
 	"crypto/cipher"
 	"errors"
 	"fmt"
+
 	"github.com/miekg/pkcs11"
 )
 
@@ -116,16 +117,16 @@ func (g genericAead) Overhead() int {
 
 func (g genericAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 	var result []byte
-	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
+	if err := g.key.context.withSession(func(session *pkcs11Session) (err error) {
 		var mech []*pkcs11.Mechanism
 		if mech, err = g.makeMech(nonce, additionalData); err != nil {
 			return
 		}
-		if err = session.Ctx.EncryptInit(session.Handle, mech, g.key.Handle); err != nil {
+		if err = session.ctx.EncryptInit(session.handle, mech, g.key.handle); err != nil {
 			err = fmt.Errorf("C_EncryptInit: %v", err)
 			return
 		}
-		if result, err = session.Ctx.Encrypt(session.Handle, plaintext); err != nil {
+		if result, err = session.ctx.Encrypt(session.handle, plaintext); err != nil {
 			err = fmt.Errorf("C_Encrypt: %v", err)
 			return
 		}
@@ -140,16 +141,16 @@ func (g genericAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 
 func (g genericAead) Open(dst, nonce, ciphertext, additionalData []byte) ([]byte, error) {
 	var result []byte
-	if err := withSession(g.key.Slot, func(session *PKCS11Session) (err error) {
+	if err := g.key.context.withSession(func(session *pkcs11Session) (err error) {
 		var mech []*pkcs11.Mechanism
 		if mech, err = g.makeMech(nonce, additionalData); err != nil {
 			return
 		}
-		if err = session.Ctx.DecryptInit(session.Handle, mech, g.key.Handle); err != nil {
+		if err = session.ctx.DecryptInit(session.handle, mech, g.key.handle); err != nil {
 			err = fmt.Errorf("C_DecryptInit: %v", err)
 			return
 		}
-		if result, err = session.Ctx.Decrypt(session.Handle, ciphertext); err != nil {
+		if result, err = session.ctx.Decrypt(session.handle, ciphertext); err != nil {
 			err = fmt.Errorf("C_Decrypt: %v", err)
 			return
 		}

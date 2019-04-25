@@ -26,31 +26,34 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"github.com/miekg/pkcs11"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPoolTimeout(t *testing.T) {
+	config, err := loadConfigFromFile("config")
+	require.NoError(t, err)
+
 	for _, d := range []time.Duration{0, time.Second} {
 		t.Run(fmt.Sprintf("first login, exp %v", d), func(t *testing.T) {
-			prevIdleTimeout := instance.cfg.IdleTimeout
-			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
-			instance.cfg.IdleTimeout = d
 
-			_, err := configureWithPin(t)
+			config.IdleTimeout = d
+
+			ctx, err := Configure(config)
 			require.NoError(t, err)
 
 			defer func() {
-				require.NoError(t, Close())
+				require.NoError(t, ctx.Close())
 			}()
 
-			time.Sleep(instance.cfg.IdleTimeout + time.Second)
+			time.Sleep(config.IdleTimeout + time.Second)
 
-			_, err = GenerateECDSAKeyPair(elliptic.P256())
+			_, err = ctx.GenerateECDSAKeyPair(elliptic.P256())
 			if err != nil {
-				if perr, ok := err.(pkcs11.Error); ok && perr == pkcs11.CKR_USER_NOT_LOGGED_IN {
+				if pErr, ok := err.(pkcs11.Error); ok && pErr == pkcs11.CKR_USER_NOT_LOGGED_IN {
 					t.Fatal("pool handle session incorrectly, login required but missing:", err)
 				} else {
 					t.Fatal("failed to generate a key, unexpected error:", err)
@@ -59,23 +62,19 @@ func TestPoolTimeout(t *testing.T) {
 		})
 
 		t.Run(fmt.Sprintf("reuse expired handle, exp %v", d), func(t *testing.T) {
-			prevIdleTimeout := instance.cfg.IdleTimeout
-			defer func() { instance.cfg.IdleTimeout = prevIdleTimeout }()
-			instance.cfg.IdleTimeout = d
+			config.IdleTimeout = d
 
-			_, err := configureWithPin(t)
+			ctx, err := Configure(config)
 			require.NoError(t, err)
 
 			defer func() {
-				require.NoError(t, Close())
+				require.NoError(t, ctx.Close())
 			}()
 
-			key, err := GenerateECDSAKeyPair(elliptic.P256())
-			if err != nil {
-				t.Fatal("failed to generate a key:", err)
-			}
+			key, err := ctx.GenerateECDSAKeyPair(elliptic.P256())
+			require.NoError(t, err)
 
-			time.Sleep(instance.cfg.IdleTimeout + time.Second)
+			time.Sleep(config.IdleTimeout + time.Second)
 
 			digest := crypto.SHA256.New()
 			digest.Write([]byte("sha256"))

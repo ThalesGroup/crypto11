@@ -29,7 +29,7 @@ import (
 	"math/big"
 	"unsafe"
 
-	pkcs11 "github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11"
 )
 
 // ErrMalformedRSAKey is returned when an RSA key is not in a suitable form.
@@ -37,10 +37,6 @@ import (
 // Currently this means that the public exponent is either bigger than
 // 32 bits, or less than 2.
 var ErrMalformedRSAKey = errors.New("crypto11/rsa: malformed RSA key")
-
-// ErrUnrecognizedRSAOptions is returned when unrecognized options
-// structures are pased to Sign or Decrypt.
-var ErrUnrecognizedRSAOptions = errors.New("crypto11/rsa: unrecognized RSA options type")
 
 // ErrUnsupportedRSAOptions is returned when an unsupported RSA option is requested.
 //
@@ -51,16 +47,16 @@ var ErrUnsupportedRSAOptions = errors.New("crypto11/rsa: unsupported RSA option 
 
 // PKCS11PrivateKeyRSA contains a reference to a loaded PKCS#11 RSA private key object.
 type PKCS11PrivateKeyRSA struct {
-	PKCS11PrivateKey
+	pkcs11PrivateKey
 }
 
 // Export the public key corresponding to a private RSA key.
-func exportRSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
+func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (crypto.PublicKey, error) {
 	template := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_MODULUS, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, nil),
 	}
-	exported, err := session.Ctx.GetAttributeValue(session.Handle, pubHandle, template)
+	exported, err := session.ctx.GetAttributeValue(session.handle, pubHandle, template)
 	if err != nil {
 		return nil, err
 	}
@@ -91,17 +87,12 @@ func exportRSAPublicKey(session *PKCS11Session, pubHandle pkcs11.ObjectHandle) (
 //
 // RSA private keys are generated with both sign and decrypt
 // permissions, and a public exponent of 65537.
-func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
-	var k *PKCS11PrivateKeyRSA
-	var err error
-	if err = ensureSessions(instance, instance.slot); err != nil {
-		return nil, err
-	}
-	err = withSession(instance.slot, func(session *PKCS11Session) error {
-		k, err = generateRSAKeyPairOnSession(session, instance.slot, nil, nil, bits)
+func (c *Context) GenerateRSAKeyPair(bits int) (k *PKCS11PrivateKeyRSA, err error) {
+	err = c.withSession(func(session *pkcs11Session) error {
+		k, err = c.generateRSAKeyPairOnSession(session, nil, nil, bits)
 		return err
 	})
-	return k, err
+	return
 }
 
 // generateRSAKeyPairOnSession creates an RSA private key of given length, on a specified session.
@@ -110,17 +101,17 @@ func GenerateRSAKeyPair(bits int) (*PKCS11PrivateKeyRSA, error) {
 //
 // RSA private keys are generated with both sign and decrypt
 // permissions, and a public exponent of 65537.
-func generateRSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
+func (c *Context) generateRSAKeyPairOnSession(session *pkcs11Session, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
 	var err error
 	var pub crypto.PublicKey
 
 	if label == nil {
-		if label, err = generateKeyLabel(); err != nil {
+		if label, err = c.generateKeyLabel(); err != nil {
 			return nil, err
 		}
 	}
 	if id == nil {
-		if id, err = generateKeyLabel(); err != nil {
+		if id, err = c.generateKeyLabel(); err != nil {
 			return nil, err
 		}
 	}
@@ -145,7 +136,7 @@ func generateRSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, l
 		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
 	}
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := session.Ctx.GenerateKeyPair(session.Handle,
+	pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
 		mech,
 		publicKeyTemplate,
 		privateKeyTemplate)
@@ -155,7 +146,7 @@ func generateRSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, l
 	if pub, err = exportRSAPublicKey(session, pubHandle); err != nil {
 		return nil, err
 	}
-	priv := PKCS11PrivateKeyRSA{PKCS11PrivateKey{PKCS11Object{privHandle, slot}, pub}}
+	priv := PKCS11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 	return &priv, nil
 }
 
@@ -167,7 +158,7 @@ func generateRSAKeyPairOnSession(session *PKCS11Session, slot uint, id []byte, l
 //
 // The underlying PKCS#11 implementation may impose further restrictions.
 func (priv *PKCS11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, options crypto.DecrypterOpts) (plaintext []byte, err error) {
-	err = withSession(priv.Slot, func(session *PKCS11Session) error {
+	err = priv.context.withSession(func(session *pkcs11Session) error {
 		if options == nil {
 			plaintext, err = decryptPKCS1v15(session, priv, ciphertext, 0)
 		} else {
@@ -185,18 +176,18 @@ func (priv *PKCS11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, opti
 	return plaintext, err
 }
 
-func decryptPKCS1v15(session *PKCS11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
+func decryptPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
 	if sessionKeyLen != 0 {
 		return nil, ErrUnsupportedRSAOptions
 	}
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil)}
-	if err := session.Ctx.DecryptInit(session.Handle, mech, key.Handle); err != nil {
+	if err := session.ctx.DecryptInit(session.handle, mech, key.handle); err != nil {
 		return nil, err
 	}
-	return session.Ctx.Decrypt(session.Handle, ciphertext)
+	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
-func decryptOAEP(session *PKCS11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash, label []byte) ([]byte, error) {
+func decryptOAEP(session *pkcs11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash, label []byte) ([]byte, error) {
 	var err error
 	var hMech, mgf, sourceData, sourceDataLen uint
 	if hMech, mgf, _, err = hashToPKCS11(hashFunction); err != nil {
@@ -212,10 +203,10 @@ func decryptOAEP(session *PKCS11Session, key *PKCS11PrivateKeyRSA, ciphertext []
 		ulongToBytes(sourceData),
 		ulongToBytes(sourceDataLen))
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, parameters)}
-	if err = session.Ctx.DecryptInit(session.Handle, mech, key.Handle); err != nil {
+	if err = session.ctx.DecryptInit(session.handle, mech, key.handle); err != nil {
 		return nil, err
 	}
-	return session.Ctx.Decrypt(session.Handle, ciphertext)
+	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
 func hashToPKCS11(hashFunction crypto.Hash) (uint, uint, uint, error) {
@@ -235,7 +226,7 @@ func hashToPKCS11(hashFunction crypto.Hash) (uint, uint, uint, error) {
 	}
 }
 
-func signPSS(session *PKCS11Session, key *PKCS11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
+func signPSS(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
 	var hMech, mgf, hLen, sLen uint
 	var err error
 	if hMech, mgf, hLen, err = hashToPKCS11(opts.Hash); err != nil {
@@ -258,30 +249,30 @@ func signPSS(session *PKCS11Session, key *PKCS11PrivateKeyRSA, digest []byte, op
 		ulongToBytes(mgf),
 		ulongToBytes(sLen))
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_PSS, parameters)}
-	if err = session.Ctx.SignInit(session.Handle, mech, key.Handle); err != nil {
+	if err = session.ctx.SignInit(session.handle, mech, key.handle); err != nil {
 		return nil, err
 	}
-	return session.Ctx.Sign(session.Handle, digest)
+	return session.ctx.Sign(session.handle, digest)
 }
 
 var pkcs1Prefix = map[crypto.Hash][]byte{
-	crypto.SHA1:   []byte{0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14},
-	crypto.SHA224: []byte{0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00, 0x04, 0x1c},
-	crypto.SHA256: []byte{0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
-	crypto.SHA384: []byte{0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
-	crypto.SHA512: []byte{0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
+	crypto.SHA1:   {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14},
+	crypto.SHA224: {0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00, 0x04, 0x1c},
+	crypto.SHA256: {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
+	crypto.SHA384: {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
+	crypto.SHA512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
 }
 
-func signPKCS1v15(session *PKCS11Session, key *PKCS11PrivateKeyRSA, digest []byte, hash crypto.Hash) (signature []byte, err error) {
+func signPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byte, hash crypto.Hash) (signature []byte, err error) {
 	/* Calculate T for EMSA-PKCS1-v1_5. */
 	oid := pkcs1Prefix[hash]
 	T := make([]byte, len(oid)+len(digest))
 	copy(T[0:len(oid)], oid)
 	copy(T[len(oid):], digest)
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS, nil)}
-	err = session.Ctx.SignInit(session.Handle, mech, key.Handle)
+	err = session.ctx.SignInit(session.handle, mech, key.handle)
 	if err == nil {
-		signature, err = session.Ctx.Sign(session.Handle, T)
+		signature, err = session.ctx.Sign(session.handle, T)
 	}
 	return
 }
@@ -301,7 +292,7 @@ func (priv *PKCS11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto
 	if err != nil {
 		return nil, err
 	}
-	err = withSession(priv.Slot, func(session *PKCS11Session) error {
+	err = priv.context.withSession(func(session *pkcs11Session) error {
 		switch opts.(type) {
 		case *rsa.PSSOptions:
 			signature, err = signPSS(session, priv, digest, opts.(*rsa.PSSOptions))
@@ -319,7 +310,7 @@ func (priv *PKCS11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto
 // limited validation is possible. (The underlying PKCS#11
 // implementation may perform stricter checking.)
 func (priv *PKCS11PrivateKeyRSA) Validate() error {
-	pub := priv.PubKey.(*rsa.PublicKey)
+	pub := priv.pubKey.(*rsa.PublicKey)
 	if pub.E < 2 {
 		return ErrMalformedRSAKey
 	}

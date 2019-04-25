@@ -22,26 +22,25 @@
 package crypto11
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRandomReader(t *testing.T) {
-	var a [32768]byte
-	var r PKCS11RandReader
-	var n int
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
+	defer func() {
+		err = ctx.Close()
+		require.NoError(t, err)
+	}()
+
+	reader := ctx.NewRandomReader()
+	var a [32768]byte
 	for _, size := range []int{1, 16, 32, 256, 347, 4096, 32768} {
-		if n, err = r.Read(a[:size]); err != nil {
-			t.Errorf("crypto11.PKCS11RandRead.Read: %v", err)
-			return
-		}
-		if n < size {
-			t.Errorf("crypto11.PKCS11RandRead.Read: only got %d bytes expected %d", n, size)
-			return
-		}
+		n, err := reader.Read(a[:size])
+		require.NoError(t, err)
+		require.Equal(t, size, n)
 	}
-	require.NoError(t, Close())
 }

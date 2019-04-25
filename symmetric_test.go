@@ -23,120 +23,100 @@ package crypto11
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/cipher"
-	"github.com/miekg/pkcs11"
-	"github.com/stretchr/testify/require"
 	"runtime"
 	"testing"
+
+	"github.com/miekg/pkcs11"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHardSymmetric(t *testing.T) {
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
-	t.Run("AES128", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 128) })
-	t.Run("AES192", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 192) })
-	t.Run("AES256", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_AES, 256) })
-	t.Run("DES3", func(t *testing.T) { testHardSymmetric(t, pkcs11.CKK_DES3, 0) })
-	require.NoError(t, Close())
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	t.Run("AES128", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 128) })
+	t.Run("AES192", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 192) })
+	t.Run("AES256", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 256) })
+	t.Run("DES3", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_DES3, 0) })
 }
 
-func testHardSymmetric(t *testing.T, keytype int, bits int) {
-	var err error
-	var key, key2 *PKCS11SecretKey
-	var id []byte
-	t.Run("Generate", func(t *testing.T) {
-		if key, err = GenerateSecretKey(bits, Ciphers[keytype]); err != nil {
-			t.Errorf("crypto11.GenerateSecretKey: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.GenerateSecretKey: returned nil but no error")
-			return
-		}
-		if id, _, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.PKCS11SecretKey.Identify: %v", err)
-			return
-		}
-	})
-	var key2gen crypto.PrivateKey
+func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
+
+	key, err := ctx.GenerateSecretKey(bits, Ciphers[keytype])
+	require.NoError(t, err)
+	require.NotNil(t, key)
+
+	id, _, err := key.Identify()
+	require.NoError(t, err)
+
+	var key2 *PKCS11SecretKey
 	t.Run("Find", func(t *testing.T) {
-		if key2gen, err = FindKey(id, nil); err != nil {
-			t.Errorf("crypto11.FindKey by id: %v", err)
-			return
-		}
-		key2 = key2gen.(*PKCS11SecretKey)
+		key2, err = ctx.FindKey(id, nil)
+		require.NoError(t, err)
 	})
+
 	t.Run("Block", func(t *testing.T) { testSymmetricBlock(t, key, key2) })
+
 	iv := make([]byte, key.BlockSize())
-	for i := 0; i < len(iv); i++ {
+	for i := range iv {
 		iv[i] = 0xF0
 	}
+
 	t.Run("CBC", func(t *testing.T) {
 		testSymmetricMode(t, cipher.NewCBCEncrypter(key2, iv), cipher.NewCBCDecrypter(key2, iv))
 	})
+
 	t.Run("CBCClose", func(t *testing.T) {
-		var enc, dec BlockModeCloser
-		if enc, err = key2.NewCBCEncrypterCloser(iv); err != nil {
-			t.Errorf("NewCBCEncrypter: %v", err)
-			return
-		}
-		if dec, err = key2.NewCBCDecrypterCloser(iv); err != nil {
-			t.Errorf("NewCBCDecrypter: %v", err)
-			return
-		}
+
+		enc, err := key2.NewCBCEncrypterCloser(iv)
+		require.NoError(t, err)
+
+		dec, err := key2.NewCBCDecrypterCloser(iv)
+		require.NoError(t, err)
+
 		testSymmetricMode(t, enc, dec)
 		enc.Close()
 		dec.Close()
 	})
+
 	t.Run("CBCNoClose", func(t *testing.T) {
-		var enc, dec cipher.BlockMode
-		if enc, err = key2.NewCBCEncrypter(iv); err != nil {
-			t.Errorf("NewCBCEncrypter: %v", err)
-			return
-		}
-		if dec, err = key2.NewCBCDecrypter(iv); err != nil {
-			t.Errorf("NewCBCDecrypter: %v", err)
-			return
-		}
+		enc, err := key2.NewCBCEncrypter(iv)
+		require.NoError(t, err)
+
+		dec, err := key2.NewCBCDecrypter(iv)
+		require.NoError(t, err)
 		testSymmetricMode(t, enc, dec)
 
 		// See discussion at BlockModeCloser.
 		runtime.GC()
 	})
+
 	t.Run("CBCSealOpen", func(t *testing.T) {
 		aead, err := key2.NewCBC(PaddingNone)
-		if err != nil {
-			t.Errorf("cipher.NewCBC: %v", err)
-			return
-		}
+		require.NoError(t, err)
 		testAEADMode(t, aead, 128, 0)
 	})
+
 	t.Run("CBCPKCSSealOpen", func(t *testing.T) {
 		aead, err := key2.NewCBC(PaddingPKCS)
-		if err != nil {
-			t.Errorf("cipher.NewCBC: %v", err)
-			return
-		}
+		require.NoError(t, err)
 		testAEADMode(t, aead, 127, 0)
 	})
 	if bits == 128 {
 		t.Run("GCMSoft", func(t *testing.T) {
 			aead, err := cipher.NewGCM(key2)
-			if err != nil {
-				t.Errorf("cipher.NewGCM: %v", err)
-				return
-			}
+			require.NoError(t, err)
 			testAEADMode(t, aead, 127, 129)
 		})
 		t.Run("GCMHard", func(t *testing.T) {
 			aead, err := key2.NewGCM()
-			if err != nil {
-				t.Errorf("key2.NewGCM: %v", err)
-				return
-			}
-			needMechanism(t, key2.Slot, pkcs11.CKM_AES_GCM)
+			require.NoError(t, err)
+			skipIfMechUnsupported(t, key2.context, pkcs11.CKM_AES_GCM)
 			testAEADMode(t, aead, 127, 129)
 		})
 		// TODO check that hard/soft is consistent!
@@ -257,23 +237,27 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 }
 
 func BenchmarkCBC(b *testing.B) {
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(b, err)
 
-	var key *PKCS11SecretKey
-	if key, err = GenerateSecretKey(128, Ciphers[pkcs11.CKK_AES]); err != nil {
-		b.Errorf("crypto11.GenerateSecretKey: %v", err)
-		return
-	}
+	defer func() {
+		require.NoError(b, ctx.Close())
+	}()
+
+	key, err := ctx.GenerateSecretKey(128, Ciphers[pkcs11.CKK_AES])
+	require.NoError(b, err)
+
 	iv := make([]byte, 16)
 	plaintext := make([]byte, 65536)
 	ciphertext := make([]byte, 65536)
+
 	b.Run("Native", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			mode := cipher.NewCBCEncrypter(key, iv)
 			mode.CryptBlocks(ciphertext, plaintext)
 		}
 	})
+
 	b.Run("IdiomaticClose", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			mode, err := key.NewCBCEncrypterCloser(iv)
@@ -284,6 +268,7 @@ func BenchmarkCBC(b *testing.B) {
 			mode.Close()
 		}
 	})
+
 	b.Run("Idiomatic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			mode, err := key.NewCBCEncrypter(iv)
@@ -294,7 +279,6 @@ func BenchmarkCBC(b *testing.B) {
 		}
 		runtime.GC()
 	})
-	require.NoError(b, Close())
 }
 
 // TODO BenchmarkGCM along the same lines as above

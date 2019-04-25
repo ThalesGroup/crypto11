@@ -22,48 +22,37 @@
 package crypto11
 
 import (
-	"crypto"
 	"crypto/dsa"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestClose(t *testing.T) {
 	// Verify that close and re-open works.
-	var err error
-	var key *PKCS11PrivateKeyDSA
-	if _, err := ConfigureFromFile("config"); err != nil {
-		t.Fatal(err)
-	}
-	psize := dsa.L1024N160
-	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
-		t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-		return
-	}
-	if key == nil {
-		t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-		return
-	}
-	var id []byte
-	if id, _, err = key.Identify(); err != nil {
-		t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
-		return
-	}
-	if err = Close(); err != nil {
-		t.Fatal(err)
-	}
+
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	const pSize = dsa.L1024N160
+	key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
+	require.NoError(t, err)
+	require.NotNil(t, key)
+
+	id, _, err := key.Identify()
+	require.NoError(t, err)
+
+	require.NoError(t, ctx.Close())
+
 	for i := 0; i < 5; i++ {
-		if _, err := ConfigureFromFile("config"); err != nil {
-			t.Fatal(err)
-		}
-		var key2 crypto.PrivateKey
-		if key2, err = FindKeyPair(id, nil); err != nil {
-			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
-			return
-		}
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", i))
-		if err = Close(); err != nil {
-			t.Fatal(err)
-		}
+		ctx, err := ConfigureFromFile("config")
+		require.NoError(t, err)
+
+		key2, err := ctx.FindKeyPair(id, nil)
+		require.NoError(t, err)
+
+		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
+		require.NoError(t, ctx.Close())
 	}
 }

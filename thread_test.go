@@ -23,26 +23,32 @@ package crypto11
 
 import (
 	"crypto"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var threadCount = 32
 var signaturesPerThread = 256
 
 func TestThreadedRSA(t *testing.T) {
-	var key *PKCS11PrivateKeyRSA
-	_, err := ConfigureFromFile("config")
+
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
-	if key, err = GenerateRSAKeyPair(1024); err != nil {
-		t.Errorf("crypto11.GenerateRSAKeyPair: %v", err)
-		return
-	}
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	key, err := ctx.GenerateRSAKeyPair(1024)
+	require.NoError(t, err)
+
 	done := make(chan int)
 	started := time.Now()
+
 	t.Logf("Starting %v threads", threadCount)
+
 	for i := 0; i < threadCount; i++ {
 		go signingRoutine(t, key, done)
 	}
@@ -56,7 +62,6 @@ func TestThreadedRSA(t *testing.T) {
 	t.Logf("Made %v signatures in %v elapsed (%v/s)",
 		threadCount*signaturesPerThread,
 		elapsed, float64(threadCount*signaturesPerThread)/elapsed)
-	require.NoError(t, Close())
 }
 
 func signingRoutine(t *testing.T, key crypto.Signer, done chan int) {

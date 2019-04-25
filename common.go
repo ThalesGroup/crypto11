@@ -75,16 +75,16 @@ func (sig *dsaSignature) marshalDER() ([]byte, error) {
 }
 
 // Compute *DSA signature and marshal the result in DER form
-func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byte) ([]byte, error) {
+func (c *Context) dsaGeneric(key pkcs11.ObjectHandle, mechanism uint, digest []byte) ([]byte, error) {
 	var err error
 	var sigBytes []byte
 	var sig dsaSignature
 	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(mechanism, nil)}
-	err = withSession(slot, func(session *PKCS11Session) error {
-		if err = instance.ctx.SignInit(session.Handle, mech, key); err != nil {
+	err = c.withSession(func(session *pkcs11Session) error {
+		if err = c.ctx.SignInit(session.handle, mech, key); err != nil {
 			return err
 		}
-		sigBytes, err = instance.ctx.Sign(session.Handle, digest)
+		sigBytes, err = c.ctx.Sign(session.handle, digest)
 		return err
 	})
 	if err != nil {
@@ -99,9 +99,9 @@ func dsaGeneric(slot uint, key pkcs11.ObjectHandle, mechanism uint, digest []byt
 }
 
 // Pick a random label for a key
-func generateKeyLabel() ([]byte, error) {
-	rawLabel := make([]byte, labelLength / 2)
-	var rand PKCS11RandReader
+func (c *Context) generateKeyLabel() ([]byte, error) {
+	rawLabel := make([]byte, labelLength/2)
+	rand := c.NewRandomReader()
 	sz, err := rand.Read(rawLabel)
 	if err != nil {
 		return nil, err

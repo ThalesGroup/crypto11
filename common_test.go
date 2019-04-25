@@ -1,16 +1,21 @@
 package crypto11
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateKeyLabel(t *testing.T) {
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
+	defer func() {
+		err = ctx.Close()
+		require.NoError(t, err)
+	}()
 
-	for i :=0; i < 100; i++ {
-		label, err := generateKeyLabel()
+	for i := 0; i < 100; i++ {
+		label, err := ctx.generateKeyLabel()
 		require.NoError(t, err)
 		require.Len(t, label, labelLength)
 		for _, b := range label {

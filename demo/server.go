@@ -1,3 +1,5 @@
+// TODO - update this
+
 // A demo program using a PKCS#11-protected key to authenticate a web server.
 //
 // To use with nShield PKCS#11, assuming an OCS-protected key:
@@ -18,16 +20,20 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/ThalesIgnite/crypto11"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+
+	"github.com/ThalesIgnite/crypto11"
 )
+
+const envVariable = "CRYPTO11_CONFIG_PATH"
 
 var keyLabel = "demo"
 var certFile = "hkey_selfcert.pem"
 
-func useHardwareKey(config *tls.Config, keyLabel string, certFile string) error {
+func useHardwareKey(config *tls.Config, keyLabel string, certFile string, ctx *crypto11.Context) error {
 	var err error
 	var cert tls.Certificate
 	var certPEM []byte
@@ -57,7 +63,8 @@ func useHardwareKey(config *tls.Config, keyLabel string, certFile string) error 
 	}
 	// Load the private key.
 	log.Printf("loading key CKA_LABEL=%s", keyLabel)
-	if key, err = crypto11.FindKeyPair(nil, []byte(keyLabel)); err != nil {
+
+	if key, err = ctx.FindKeyPair(nil, []byte(keyLabel)); err != nil {
 		return err
 	}
 	cert.PrivateKey = key
@@ -83,9 +90,20 @@ func useHardwareKey(config *tls.Config, keyLabel string, certFile string) error 
 }
 
 func main() {
+	configFile, found := os.LookupEnv(envVariable)
+	if !found {
+		log.Fatalf("Set %s and try again", envVariable)
+	}
+
+	// Fail early if P11 badly configured
+	ctx, err := crypto11.ConfigureFromFile(configFile)
+	if err != nil {
+		log.Fatalf("Failed to configure PKCS#11: %s", err.Error())
+	}
+
 	http.Handle("/", http.FileServer(http.Dir("/usr/share/doc")))
 	server := &http.Server{Addr: ":9090", TLSConfig: &tls.Config{}}
-	if err := useHardwareKey(server.TLSConfig, keyLabel, certFile); err != nil {
+	if err := useHardwareKey(server.TLSConfig, keyLabel, certFile, ctx); err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("starting server on %s", server.Addr)
