@@ -22,4 +22,4 @@ script:
  - export SOFTHSM2_CONF=`pwd`/softhsm2.conf
  - softhsm2-util --init-token --slot 0 --label test --so-pin sopassword --pin password
  - cp configs/config.softhsm2 config
- - go -mod readonly test -v -bench .
+ - go test -mod readonly -v -bench .
