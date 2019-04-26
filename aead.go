@@ -31,13 +31,14 @@ import (
 
 // cipher.AEAD ----------------------------------------------------------
 
+// A PaddingMode is used by a block cipher (see NewCBC).
 type PaddingMode int
 
 const (
-	// PaddingNone represents a block cipher with no padding. (See NewCBC.)
+	// PaddingNone represents a block cipher with no padding.
 	PaddingNone PaddingMode = iota
 
-	// PaddingPKCS represents a block cipher used with PKCS#7 padding. (See NewCBC.)
+	// PaddingPKCS represents a block cipher used with PKCS#7 padding.
 	PaddingPKCS
 )
 
