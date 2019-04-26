@@ -21,29 +21,30 @@
 
 // Package crypto11 enables access to cryptographic keys from PKCS#11 using Go crypto API.
 //
-// Simple use
+// Configuration
 //
-// 1. Either write a configuration file (see ConfigureFromFile) or
-// define a configuration in your application (see Config and
-// Configure). This will identify the PKCS#11 library and token to
-// use, and contain the password (or "PIN" in PKCS#11 terminology) to
-// use. A Context is returned, which is then used to invoke operations
-// on the PKCS#11 token.
+// PKCS#11 tokens are accessed via Context objects. Each Context connects to one token.
 //
-// 2. Create keys with GenerateDSAKeyPairWithLabel, GenerateRSAKeyPair and
-// GenerateECDSAKeyPair. The keys you get back implement the standard
-// Go crypto.Signer interface (and crypto.Decrypter, for RSA). They
-// are automatically persisted under random a randomly generated label
-// and ID (use the Identify method to discover them).
+// Context objects are created by calling Configure or ConfigureFromFile.
+// In the latter case, the file should contain a JSON representation of
+// a Config.
 //
-// 3. Retrieve existing keys with FindKeyPair. The returned value is a
-// Go crypto.PrivateKey; it may be converted either to crypto.Signer
-// or to *pkcs11PrivateKeyDSA, *pkcs11PrivateKeyECDSA or
-// *pkcs11PrivateKeyRSA.
+// Key Generation and Usage
+//
+// There is support for generating DSA, RSA and ECDSA keys. These keys
+// can be found later using FindKeyPair. All three key types implement
+// the crypto.Signer interface and the RSA keys also implement crypto.Decrypter.
+//
+// RSA keys obtained through FindKeyPair will need a type assertion to be
+// used for decryption. Assert either crypto.Decrypter or SignerDecrypter, as you
+// prefer.
+//
+// Symmetric keys can also be generated. These are found later using FindKey.
+// See the documentation for SecretKey for further information.
 //
 // Sessions and concurrency
 //
-// // Note that PKCS#11 session handles must not be used concurrently
+// Note that PKCS#11 session handles must not be used concurrently
 // from multiple threads. Consumers of the Signer interface know
 // nothing of this and expect to be able to sign from multiple threads
 // without constraint. We address this as follows.
@@ -53,21 +54,21 @@
 // to ensure all object handles remain valid and to avoid repeatedly
 // calling C_Login.
 //
-// 2. The Context maintains a pool of read-write sessions. The pool expands
+// 2. The Context also maintains a pool of read-write sessions. The pool expands
 // dynamically as needed, but never beyond the maximum number of r/w sessions
-// supported by the token as reported by C_GetInfo. If other applications
-// are using the token, a lower limit should be set (see below).
+// supported by the token (as reported by C_GetInfo). If other applications
+// are using the token, a lower limit should be set in the Config.
 //
 // 3. Each operation transiently takes a session from the pool. They
 // have exclusive use of the session, meeting PKCS#11's concurrency
 // requirements. Sessions are returned to the pool afterwards and may
 // be re-used.
 //
-// Behaviour of the pool can be tweaked via configuration options:
+// Behaviour of the pool can be tweaked via Config fields:
 //
 // - PoolWaitTimeout controls how long an operation can block waiting on a
-// session from the pool. A zero value means there is no limit. Timeouts only
-// occur if the pool is full and additional operations are requested.
+// session from the pool. A zero value means there is no limit. Timeouts
+// occur if the pool is fully used and additional operations are requested.
 //
 // - MaxSessions sets an upper bound on the number of sessions. If this value is zero,
 // a default maximum is used (see DefaultMaxSessions). In every case the maximum
