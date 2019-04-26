@@ -24,7 +24,7 @@
 // Simple use
 //
 // 1. Either write a configuration file (see ConfigureFromFile) or
-// define a configuration in your application (see PKCS11Config and
+// define a configuration in your application (see Config and
 // Configure). This will identify the PKCS#11 library and token to
 // use, and contain the password (or "PIN" in PKCS#11 terminology) to
 // use. A Context is returned, which is then used to invoke operations
@@ -100,7 +100,7 @@ import (
 
 const (
 	// DefaultMaxSessions controls the maximum number of concurrent sessions to
-	// open, unless otherwise specified in the PKCS11Config object.
+	// open, unless otherwise specified in the Config object.
 	DefaultMaxSessions = 1024
 )
 
@@ -153,7 +153,7 @@ type pkcs11PrivateKey struct {
 // All functions, except Close, are safe to call from multiple goroutines.
 type Context struct {
 	ctx *pkcs11.Ctx
-	cfg *PKCS11Config
+	cfg *Config
 
 	token *pkcs11.TokenInfo
 	slot  uint
@@ -181,13 +181,13 @@ func (c *Context) findToken(slots []uint, serial string, label string) (uint, *p
 	return 0, nil, ErrTokenNotFound
 }
 
-// PKCS11Config holds PKCS#11 configuration information.
+// Config holds PKCS#11 configuration information.
 //
 // A token may be identified either by serial number or label.  If
 // both are specified then the first match wins.
 //
 // Supply this to Configure(), or alternatively use ConfigureFromFile().
-type PKCS11Config struct {
+type Config struct {
 	// Full path to PKCS#11 library.
 	Path string
 
@@ -208,7 +208,7 @@ type PKCS11Config struct {
 }
 
 // Configure creates a new Context based on the supplied PKCS#11 configuration.
-func Configure(config *PKCS11Config) (*Context, error) {
+func Configure(config *Config) (*Context, error) {
 	if config.MaxSessions == 0 {
 		config.MaxSessions = DefaultMaxSessions
 	}
@@ -289,7 +289,7 @@ func castDown(orig uint) int {
 
 // ConfigureFromFile is a convenience method, which parses the configuration file
 // and calls Configure. The configuration file should be a JSON representation
-// of a PKCS11Config object.
+// of a Config object.
 func ConfigureFromFile(configLocation string) (*Context, error) {
 	config, err := loadConfigFromFile(configLocation)
 	if err != nil {
@@ -299,8 +299,8 @@ func ConfigureFromFile(configLocation string) (*Context, error) {
 	return Configure(config)
 }
 
-// loadConfigFromFile reads a PKCS11Config struct from a file.
-func loadConfigFromFile(configLocation string) (*PKCS11Config, error) {
+// loadConfigFromFile reads a Config struct from a file.
+func loadConfigFromFile(configLocation string) (*Config, error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "could not open config file: %s", configLocation)
@@ -313,7 +313,7 @@ func loadConfigFromFile(configLocation string) (*PKCS11Config, error) {
 	}()
 
 	configDecoder := json.NewDecoder(file)
-	config := &PKCS11Config{}
+	config := &Config{}
 	err = configDecoder.Decode(config)
 	return config, errors.WithMessage(err, "could decode config file:")
 }

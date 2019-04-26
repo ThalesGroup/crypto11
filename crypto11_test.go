@@ -34,7 +34,7 @@ import (
 
 func TestInitializeFromConfig(t *testing.T) {
 	// TODO - this test is odd looking and needs reworking
-	var config PKCS11Config
+	var config Config
 	config.Path = "NoSuchFile"
 	config.Pin = "NoSuchPin"
 	config.TokenSerial = "NoSuchToken"
@@ -128,7 +128,7 @@ func configureWithPin(t *testing.T) (*Context, error) {
 	return ctx, nil
 }
 
-func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
+func getConfig(configLocation string) (ctx *Config, err error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
 		log.Printf("Could not open config file: %s", configLocation)
@@ -139,7 +139,7 @@ func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
 	}()
 
 	configDecoder := json.NewDecoder(file)
-	config := &PKCS11Config{}
+	config := &Config{}
 	err = configDecoder.Decode(config)
 	if err != nil {
 		log.Printf("Could decode config file: %s", err.Error())
