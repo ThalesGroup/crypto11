@@ -327,3 +327,8 @@ func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *Symmetri
 	})
 	return
 }
+
+// Delete deletes the secret key from the token.
+func (key *SecretKey) Delete() error {
+	return key.pkcs11Object.Delete()
+}

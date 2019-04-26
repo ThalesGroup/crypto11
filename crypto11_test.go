@@ -166,3 +166,26 @@ func TestKeyPairDelete(t *testing.T) {
 	_, err = ctx.FindKeyPair(id, nil)
 	require.Equal(t, ErrKeyNotFound, err)
 }
+
+func TestKeyDelete(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	id := randomBytes()
+	key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
+	require.NoError(t, err)
+
+	// Check we can find it
+	_, err = ctx.FindKey(id, nil)
+	require.NoError(t, err)
+
+	err = key.Delete()
+	require.NoError(t, err)
+
+	_, err = ctx.FindKey(id, nil)
+	require.Equal(t, ErrKeyNotFound, err)
+}

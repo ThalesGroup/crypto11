@@ -135,6 +135,13 @@ type pkcs11Object struct {
 	context *Context
 }
 
+func (o *pkcs11Object) Delete() error {
+	return o.context.withSession(func(session *pkcs11Session) error {
+		err := session.ctx.DestroyObject(session.handle, o.handle)
+		return errors.WithMessage(err, "crypto11: failed to destroy key")
+	})
+}
+
 // pkcs11PrivateKey contains a reference to a loaded PKCS#11 private key object.
 type pkcs11PrivateKey struct {
 	pkcs11Object
@@ -149,13 +156,13 @@ type pkcs11PrivateKey struct {
 
 // Delete implements Signer.Delete.
 func (k *pkcs11PrivateKey) Delete() error {
-	return k.context.withSession(func(session *pkcs11Session) error {
-		err := session.ctx.DestroyObject(session.handle, k.pkcs11Object.handle)
-		if err != nil {
-			return errors.WithMessage(err, "crypto11: failed to destroy private key")
-		}
+	err := k.pkcs11Object.Delete()
+	if err != nil {
+		return err
+	}
 
-		err = session.ctx.DestroyObject(session.handle, k.pubKeyHandle)
+	return k.context.withSession(func(session *pkcs11Session) error {
+		err := session.ctx.DestroyObject(session.handle, k.pubKeyHandle)
 		return errors.WithMessage(err, "crypto11: failed to destroy public key")
 	})
 }
