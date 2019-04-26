@@ -238,14 +238,14 @@ var Ciphers = map[int]*SymmetricCipher{
 	pkcs11.CKK_SHA512_HMAC:    CipherHMACSHA512,
 }
 
-// PKCS11SecretKey contains a reference to a loaded PKCS#11 symmetric key object.
+// SecretKey contains a reference to a loaded PKCS#11 symmetric key object.
 //
-// A *PKCS11SecretKey implements the cipher.Block interface, allowing it be used
+// A *SecretKey implements the cipher.Block interface, allowing it be used
 // as the argument to cipher.NewCBCEncrypter and similar methods.
 // For bulk operation this is very inefficient;
 // using NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC from this package is
 // much faster.
-type PKCS11SecretKey struct {
+type SecretKey struct {
 	pkcs11Object
 
 	// Symmetric cipher information
@@ -254,7 +254,7 @@ type PKCS11SecretKey struct {
 
 // GenerateSecretKey creates an secret key of given length and type. The id parameter is used to
 // set CKA_ID and must be non-nil.
-func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 
 // GenerateSecretKey creates an secret key of given length and type. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
-func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 }
 
 // generateSecretKey creates an secret key of given length and type.
-func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *PKCS11SecretKey, err error) {
+func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
@@ -310,7 +310,7 @@ func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *Symmetri
 
 			privHandle, err := session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
 			if err == nil {
-				k = &PKCS11SecretKey{pkcs11Object{privHandle, c}, cipher}
+				k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 				return nil
 			}
 

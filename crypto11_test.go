@@ -143,3 +143,26 @@ func getConfig(configLocation string) (ctx *Config, err error) {
 	}
 	return config, nil
 }
+
+func TestKeyPairDelete(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	id := randomBytes()
+	key, err := ctx.GenerateRSAKeyPair(id, 2048)
+	require.NoError(t, err)
+
+	// Check we can find it
+	_, err = ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
+
+	err = key.Delete()
+	require.NoError(t, err)
+
+	_, err = ctx.FindKeyPair(id, nil)
+	require.Equal(t, ErrKeyNotFound, err)
+}

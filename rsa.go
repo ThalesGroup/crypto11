@@ -45,14 +45,6 @@ var ErrMalformedRSAKey = errors.New("crypto11/rsa: malformed RSA key")
 // requested.
 var ErrUnsupportedRSAOptions = errors.New("crypto11/rsa: unsupported RSA option value")
 
-// SignerDecrypter implements crypto.Signer and crypto.Decrypter.
-type SignerDecrypter interface {
-	crypto.Signer
-
-	// Decrypt implements crypto.Decrypter.
-	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
-}
-
 // pkcs11PrivateKeyRSA contains a reference to a loaded PKCS#11 RSA private key object.
 type pkcs11PrivateKeyRSA struct {
 	pkcs11PrivateKey
@@ -159,7 +151,15 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecryp
 		if err != nil {
 			return err
 		}
-		k = &pkcs11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		k = &pkcs11PrivateKeyRSA{
+			pkcs11PrivateKey: pkcs11PrivateKey{
+				pkcs11Object: pkcs11Object{
+					handle:  privHandle,
+					context: c,
+				},
+				pubKeyHandle: pubHandle,
+				pubKey:       pub,
+			}}
 		return nil
 	})
 	return

@@ -40,7 +40,7 @@ const (
 )
 
 type genericAead struct {
-	key *PKCS11SecretKey
+	key *SecretKey
 
 	overhead int
 
@@ -54,7 +54,7 @@ type genericAead struct {
 //
 // This depends on the HSM supporting the CKM_*_GCM mechanism. If it is not supported
 // then you must use cipher.NewGCM; it will be slow.
-func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
+func (key *SecretKey) NewGCM() (g cipher.AEAD, err error) {
 	if key.Cipher.GCMMech == 0 {
 		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.GenParams[0].KeyType)
 		return
@@ -77,7 +77,7 @@ func (key *PKCS11SecretKey) NewGCM() (g cipher.AEAD, err error) {
 // Despite the cipher.AEAD return type, there is no support for additional data and no authentication.
 // This method exists to provide a convenient way to do bulk (possibly padded) CBC encryption.
 // Think carefully before passing the cipher.AEAD to any consumer that expects authentication.
-func (key *PKCS11SecretKey) NewCBC(paddingMode int) (g cipher.AEAD, err error) {
+func (key *SecretKey) NewCBC(paddingMode int) (g cipher.AEAD, err error) {
 	g = genericAead{
 		key:       key,
 		overhead:  0,

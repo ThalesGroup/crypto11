@@ -30,7 +30,7 @@ import (
 // cipher.Block ---------------------------------------------------------
 
 // BlockSize returns the cipher's block size in bytes.
-func (key *PKCS11SecretKey) BlockSize() int {
+func (key *SecretKey) BlockSize() int {
 	return key.Cipher.BlockSize
 }
 
@@ -40,7 +40,7 @@ func (key *PKCS11SecretKey) BlockSize() int {
 // Using this method for bulk operation is very inefficient, as it makes a round trip to the HSM
 // (which may be network-connected) for each block.
 // For more efficient operation, see NewCBCDecrypterCloser, NewCBCDecrypter or NewCBC.
-func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
+func (key *SecretKey) Decrypt(dst, src []byte) {
 	var result []byte
 	if err := key.context.withSession(func(session *pkcs11Session) (err error) {
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.ECBMech, nil)}
@@ -68,7 +68,7 @@ func (key *PKCS11SecretKey) Decrypt(dst, src []byte) {
 // Using this method for bulk operation is very inefficient, as it makes a round trip to the HSM
 // (which may be network-connected) for each block.
 // For more efficient operation, see NewCBCEncrypterCloser, NewCBCEncrypter or NewCBC.
-func (key *PKCS11SecretKey) Encrypt(dst, src []byte) {
+func (key *SecretKey) Encrypt(dst, src []byte) {
 	var result []byte
 	if err := key.context.withSession(func(session *pkcs11Session) (err error) {
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.ECBMech, nil)}

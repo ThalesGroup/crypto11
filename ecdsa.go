@@ -218,7 +218,7 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 // GenerateECDSAKeyPair creates a ECDSA key pair on the token using curve c. The id parameter is used to
 // set CKA_ID and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (crypto.Signer, error) {
+func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (crypto.
 // GenerateECDSAKeyPairWithLabel creates a ECDSA key pair on the token using curve c. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (crypto.Signer, error) {
+func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -285,7 +285,15 @@ func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (
 		if err != nil {
 			return err
 		}
-		k = &pkcs11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		k = &pkcs11PrivateKeyECDSA{
+			pkcs11PrivateKey: pkcs11PrivateKey{
+				pkcs11Object: pkcs11Object{
+					handle:  privHandle,
+					context: c,
+				},
+				pubKeyHandle: pubHandle,
+				pubKey:       pub,
+			}}
 		return nil
 	})
 	return

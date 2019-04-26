@@ -89,6 +89,7 @@ package crypto11
 import (
 	"crypto"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -138,13 +139,25 @@ type pkcs11Object struct {
 type pkcs11PrivateKey struct {
 	pkcs11Object
 
-	// The corresponding public key
-	pubKey crypto.PublicKey
+	// pubKeyHandle is a handle to the public key.
+	pubKeyHandle pkcs11.ObjectHandle
 
-	// In a former design we carried around the object handle for the
-	// public key and retrieved it on demand.  The downside of that is
-	// that the Public() method on Signer &c has no way to communicate
-	// errors.
+	// pubKey is an exported copy of the public key. We pre-export the key material because crypto.Signer.Public
+	// doesn't allow us to return errors.
+	pubKey crypto.PublicKey
+}
+
+// Delete implements Signer.Delete.
+func (k *pkcs11PrivateKey) Delete() error {
+	return k.context.withSession(func(session *pkcs11Session) error {
+		err := session.ctx.DestroyObject(session.handle, k.pkcs11Object.handle)
+		if err != nil {
+			return errors.WithMessage(err, "crypto11: failed to destroy private key")
+		}
+
+		err = session.ctx.DestroyObject(session.handle, k.pubKeyHandle)
+		return errors.WithMessage(err, "crypto11: failed to destroy public key")
+	})
 }
 
 // A Context stores the connection state to a PKCS#11 token. Use Configure or ConfigureFromFile to create a new
@@ -162,6 +175,22 @@ type Context struct {
 	// persistentSession is a session held open so we can be confident handles and login status
 	// persist for the duration of this context
 	persistentSession pkcs11.SessionHandle
+}
+
+// Signer is a PKCS#11 key that implements crypto.Signer.
+type Signer interface {
+	crypto.Signer
+
+	// Delete deletes the key pair from the token.
+	Delete() error
+}
+
+// SignerDecrypter is a PKCS#11 key implements crypto.Signer and crypto.Decrypter.
+type SignerDecrypter interface {
+	Signer
+
+	// Decrypt implements crypto.Decrypter.
+	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
 }
 
 // findToken finds a token given its serial number

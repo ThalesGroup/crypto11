@@ -52,7 +52,7 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	require.NoError(t, err)
 	require.NotNil(t, key)
 
-	var key2 *PKCS11SecretKey
+	var key2 *SecretKey
 	t.Run("Find", func(t *testing.T) {
 		key2, err = ctx.FindKey(id, nil)
 		require.NoError(t, err)

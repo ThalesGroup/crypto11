@@ -55,7 +55,7 @@ const (
 // If this is a problem for your application then use NewCBCEncrypterCloser instead.
 //
 // If that is not possible then adding calls to runtime.GC() may help.
-func (key *PKCS11SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err error) {
+func (key *SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, true)
 }
 
@@ -66,7 +66,7 @@ func (key *PKCS11SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err
 // If this is a problem for your application then use NewCBCDecrypterCloser instead.
 //
 // If that is not possible then adding calls to runtime.GC() may help.
-func (key *PKCS11SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err error) {
+func (key *SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, true)
 }
 
@@ -75,7 +75,7 @@ func (key *PKCS11SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err
 //
 // Use of NewCBCEncrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
 // of the returned BlockModeCloser.
-func (key *PKCS11SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
+func (key *SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, false)
 }
 
@@ -84,7 +84,7 @@ func (key *PKCS11SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeClose
 //
 // Use of NewCBCDecrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
 // of the returned BlockModeCloser.
-func (key *PKCS11SecretKey) NewCBCDecrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
+func (key *SecretKey) NewCBCDecrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, false)
 }
 
@@ -104,7 +104,7 @@ type blockModeCloser struct {
 }
 
 // newBlockModeCloser creates a new blockModeCloser for the chosen mechanism and mode.
-func (key *PKCS11SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFinalizer bool) (*blockModeCloser, error) {
+func (key *SecretKey) newBlockModeCloser(mech uint, mode int, iv []byte, setFinalizer bool) (*blockModeCloser, error) {
 
 	session, err := key.context.getSession()
 	if err != nil {

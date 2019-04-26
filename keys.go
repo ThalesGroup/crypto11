@@ -92,19 +92,43 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (k crypto.PrivateKey, err
 			if pub, err = exportDSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &pkcs11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyDSA{
+				pkcs11PrivateKey: pkcs11PrivateKey{
+					pkcs11Object: pkcs11Object{
+						handle:  privHandle,
+						context: c,
+					},
+					pubKeyHandle: pubHandle,
+					pubKey:       pub,
+				}}
 
 		case pkcs11.CKK_RSA:
 			if pub, err = exportRSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &pkcs11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyRSA{
+				pkcs11PrivateKey: pkcs11PrivateKey{
+					pkcs11Object: pkcs11Object{
+						handle:  privHandle,
+						context: c,
+					},
+					pubKeyHandle: pubHandle,
+					pubKey:       pub,
+				}}
 
 		case pkcs11.CKK_ECDSA:
 			if pub, err = exportECDSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &pkcs11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyECDSA{
+				pkcs11PrivateKey: pkcs11PrivateKey{
+					pkcs11Object: pkcs11Object{
+						handle:  privHandle,
+						context: c,
+					},
+					pubKeyHandle: pubHandle,
+					pubKey:       pub,
+				}}
 
 		default:
 			return ErrUnsupportedKeyType
@@ -120,14 +144,14 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (k crypto.PrivateKey, err
 // This partially implements the go.crypto.Signer and go.crypto.Decrypter interfaces for
 // pkcs11PrivateKey. (The remains of the implementation is in the
 // key-specific types.)
-func (signer pkcs11PrivateKey) Public() crypto.PublicKey {
-	return signer.pubKey
+func (k pkcs11PrivateKey) Public() crypto.PublicKey {
+	return k.pubKey
 }
 
 // FindKey retrieves a previously created symmetric key.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
-func (c *Context) FindKey(id []byte, label []byte) (k *PKCS11SecretKey, err error) {
+func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 		var privHandle pkcs11.ObjectHandle
 		if privHandle, err = findKey(session, id, label, pkcs11.CKO_SECRET_KEY, ^uint(0)); err != nil {
@@ -140,7 +164,7 @@ func (c *Context) FindKey(id []byte, label []byte) (k *PKCS11SecretKey, err erro
 			return err
 		}
 		if cipher, ok := Ciphers[int(bytesToUlong(attributes[0].Value))]; ok {
-			k = &PKCS11SecretKey{pkcs11Object{privHandle, c}, cipher}
+			k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 		} else {
 			return ErrUnsupportedKeyType
 		}
