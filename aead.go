@@ -56,22 +56,21 @@ type genericAead struct {
 //
 // This depends on the HSM supporting the CKM_*_GCM mechanism. If it is not supported
 // then you must use cipher.NewGCM; it will be slow.
-func (key *SecretKey) NewGCM() (g cipher.AEAD, err error) {
+func (key *SecretKey) NewGCM() (cipher.AEAD, error) {
 	if key.Cipher.GCMMech == 0 {
-		err = fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.GenParams[0].KeyType)
-		return
+		return nil, fmt.Errorf("GCM not implemented for key type %#x", key.Cipher.GenParams[0].KeyType)
 	}
-	g = genericAead{
+
+	g := genericAead{
 		key:       key,
 		overhead:  16,
 		nonceSize: 12,
-		makeMech: func(nonce []byte, additionalData []byte) (mech []*pkcs11.Mechanism, error error) {
+		makeMech: func(nonce []byte, additionalData []byte) ([]*pkcs11.Mechanism, error) {
 			params := pkcs11.NewGCMParams(nonce, additionalData, 16*8 /*bits*/)
-			mech = []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.GCMMech, params)}
-			return
+			return []*pkcs11.Mechanism{pkcs11.NewMechanism(key.Cipher.GCMMech, params)}, nil
 		},
 	}
-	return
+	return g, nil
 }
 
 // NewCBC returns a given cipher wrapped in CBC mode.

@@ -55,7 +55,7 @@ const (
 // If this is a problem for your application then use NewCBCEncrypterCloser instead.
 //
 // If that is not possible then adding calls to runtime.GC() may help.
-func (key *SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err error) {
+func (key *SecretKey) NewCBCEncrypter(iv []byte) (cipher.BlockMode, error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, true)
 }
 
@@ -66,7 +66,7 @@ func (key *SecretKey) NewCBCEncrypter(iv []byte) (bm cipher.BlockMode, err error
 // If this is a problem for your application then use NewCBCDecrypterCloser instead.
 //
 // If that is not possible then adding calls to runtime.GC() may help.
-func (key *SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err error) {
+func (key *SecretKey) NewCBCDecrypter(iv []byte) (cipher.BlockMode, error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, true)
 }
 
@@ -75,7 +75,7 @@ func (key *SecretKey) NewCBCDecrypter(iv []byte) (bm cipher.BlockMode, err error
 //
 // Use of NewCBCEncrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
 // of the returned BlockModeCloser.
-func (key *SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
+func (key *SecretKey) NewCBCEncrypterCloser(iv []byte) (BlockModeCloser, error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeEncrypt, iv, false)
 }
 
@@ -84,7 +84,7 @@ func (key *SecretKey) NewCBCEncrypterCloser(iv []byte) (bmc BlockModeCloser, err
 //
 // Use of NewCBCDecrypterCloser rather than NewCBCEncrypter represents a commitment to call the Close() method
 // of the returned BlockModeCloser.
-func (key *SecretKey) NewCBCDecrypterCloser(iv []byte) (bmc BlockModeCloser, err error) {
+func (key *SecretKey) NewCBCDecrypterCloser(iv []byte) (BlockModeCloser, error) {
 	return key.newBlockModeCloser(key.Cipher.CBCMech, modeDecrypt, iv, false)
 }
 
