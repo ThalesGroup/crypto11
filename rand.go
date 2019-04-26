@@ -21,11 +21,17 @@
 
 package crypto11
 
-import "io"
+import (
+	"io"
+)
 
 // NewRandomReader returns a reader for the random number generator on the token.
-func (c *Context) NewRandomReader() io.Reader {
-	return pkcs11RandReader{c}
+func (c *Context) NewRandomReader() (io.Reader, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
+	return pkcs11RandReader{c}, nil
 }
 
 // pkcs11RandReader is a random number reader that uses PKCS#11.

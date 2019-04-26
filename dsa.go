@@ -75,6 +75,10 @@ func notNilBytes(obj []byte, name string) error {
 // GenerateDSAKeyPair creates a DSA key pair on the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -85,6 +89,10 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 // GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
 func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Parameters) (Signer, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}

@@ -84,6 +84,10 @@ func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 // GenerateRSAKeyPair creates an RSA key pair on the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -94,6 +98,10 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
 func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (SignerDecrypter, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}

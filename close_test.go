@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"crypto/dsa"
+	"crypto/elliptic"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -66,4 +67,47 @@ func randomBytes() []byte {
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+func TestErrorAfterClosed(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	err = ctx.Close()
+	require.NoError(t, err)
+
+	bytes := randomBytes()
+
+	_, err = ctx.FindKey(bytes, nil)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.FindKeyPair(bytes, nil)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateSecretKey(bytes, 256, CipherAES)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateSecretKeyWithLabel(bytes, bytes, 256, CipherAES)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateRSAKeyPair(bytes, 2048)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateRSAKeyPairWithLabel(bytes, bytes, 2048)
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateDSAKeyPair(bytes, dsaSizes[dsa.L1024N160])
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateDSAKeyPairWithLabel(bytes, bytes, dsaSizes[dsa.L1024N160])
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateECDSAKeyPair(bytes, elliptic.P224())
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.GenerateECDSAKeyPairWithLabel(bytes, bytes, elliptic.P224())
+	require.Equal(t, ErrClosed, err)
+
+	_, err = ctx.NewRandomReader()
+	require.Equal(t, ErrClosed, err)
 }

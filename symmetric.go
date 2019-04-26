@@ -255,6 +255,10 @@ type SecretKey struct {
 // GenerateSecretKey creates an secret key of given length and type. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -265,6 +269,10 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 // GenerateSecretKey creates an secret key of given length and type. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
 func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}

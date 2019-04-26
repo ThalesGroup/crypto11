@@ -219,6 +219,10 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 // set CKA_ID and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
 func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -230,6 +234,10 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 // set CKA_ID and CKA_LABEL respectively and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
 func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (Signer, error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}

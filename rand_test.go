@@ -36,7 +36,9 @@ func TestRandomReader(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	reader := ctx.NewRandomReader()
+	reader, err := ctx.NewRandomReader()
+	require.NoError(t, err)
+
 	var a [32768]byte
 	for _, size := range []int{1, 16, 32, 256, 347, 4096, 32768} {
 		n, err := reader.Read(a[:size])

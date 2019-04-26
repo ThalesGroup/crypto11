@@ -67,9 +67,15 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass uint, key
 // FindKeyPair retrieves a previously created asymmetric key.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
-func (c *Context) FindKeyPair(id []byte, label []byte) (k Signer, err error) {
-	// TODO - check how this handles missing keys
-	err = c.withSession(func(session *pkcs11Session) error {
+func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
+
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
+	var k Signer
+
+	err := c.withSession(func(session *pkcs11Session) error {
 		var err error
 		var privHandle, pubHandle pkcs11.ObjectHandle
 		var pub crypto.PublicKey
@@ -136,7 +142,7 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (k Signer, err error) {
 
 		return nil
 	})
-	return
+	return k, err
 }
 
 // Public returns the public half of a private key.
@@ -152,6 +158,10 @@ func (k pkcs11PrivateKey) Public() crypto.PublicKey {
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
+	if c.closed.Get() {
+		return nil, ErrClosed
+	}
+
 	err = c.withSession(func(session *pkcs11Session) error {
 		var privHandle pkcs11.ObjectHandle
 		if privHandle, err = findKey(session, id, label, pkcs11.CKO_SECRET_KEY, ^uint(0)); err != nil {

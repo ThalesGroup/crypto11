@@ -95,6 +95,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/vitessio/vitess/go/sync2"
+
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 	"github.com/vitessio/vitess/go/pools"
@@ -170,6 +172,9 @@ func (k *pkcs11PrivateKey) Delete() error {
 //
 // All functions, except Close, are safe to call from multiple goroutines.
 type Context struct {
+	// Atomic fields must be at top (according to the package owners)
+	closed sync2.AtomicBool
+
 	ctx *pkcs11.Ctx
 	cfg *Config
 
@@ -355,6 +360,7 @@ func loadConfigFromFile(configLocation string) (*Config, error) {
 // Close releases all the resources used by the Context and unloads the PKCS #11 library. Close blocks until existing
 // operations have finished. A closed Context cannot be reused.
 func (c *Context) Close() error {
+	c.closed.Set(true)
 
 	// Block until all resources returned to pool
 	c.pool.Close()
