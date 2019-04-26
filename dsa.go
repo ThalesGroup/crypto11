@@ -27,6 +27,8 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/pkg/errors"
+
 	pkcs11 "github.com/miekg/pkcs11"
 )
 
@@ -63,9 +65,38 @@ func exportDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 	return &result, nil
 }
 
-// GenerateDSAKeyPair creates a DSA private key on the token. The CKA_ID and CKA_LABEL attributes can be set by passing
-// non-nil values for id and label.
-func (c *Context) GenerateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *PKCS11PrivateKeyDSA, err error) {
+func notNilBytes(obj []byte, name string) error {
+	if obj == nil {
+		return errors.Errorf("crypto11: %s cannot be nil", name)
+	}
+	return nil
+}
+
+// GenerateDSAKeyPair creates a DSA key pair on the token. The id parameter is used to
+// set CKA_ID and must be non-nil.
+func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+
+	return c.generateDSAKeyPair(id, nil, params)
+}
+
+// GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
+// set CKA_ID and CKA_LABEL respectively and must be non-nil.
+func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+	if err := notNilBytes(label, "label"); err != nil {
+		return nil, err
+	}
+
+	return c.generateDSAKeyPair(id, label, params)
+}
+
+// generateDSAKeyPair creates a DSA private key on the token.
+func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *PKCS11PrivateKeyDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 		p := params.P.Bytes()
 		q := params.Q.Bytes()

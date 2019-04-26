@@ -215,12 +215,33 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 	return &pub, nil
 }
 
-// GenerateECDSAKeyPair creates an ECDSA private key using curve c. The CKA_ID and CKA_LABEL attributes can be set by passing
-// non-nil values for id and label.
-//
-// Only a limited set of named elliptic curves are supported. The
+// GenerateECDSAKeyPair creates a ECDSA key pair on the token using curve c. The id parameter is used to
+// set CKA_ID and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (k *PKCS11PrivateKeyECDSA, err error) {
+func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+
+	return c.generateECDSAKeyPair(id, nil, curve)
+}
+
+// GenerateECDSAKeyPairWithLabel creates a ECDSA key pair on the token using curve c. The id and label parameters are used to
+// set CKA_ID and CKA_LABEL respectively and must be non-nil. Only a limited set of named elliptic curves are supported. The
+// underlying PKCS#11 implementation may impose further restrictions.
+func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+	if err := notNilBytes(label, "label"); err != nil {
+		return nil, err
+	}
+
+	return c.generateECDSAKeyPair(id, label, curve)
+}
+
+// generateECDSAKeyPair generates a key pair on the token.
+func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (k *PKCS11PrivateKeyECDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		parameters, err := marshalEcParams(curve)

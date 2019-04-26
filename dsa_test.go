@@ -114,7 +114,7 @@ func TestHardDSA(t *testing.T) {
 		id := randomBytes()
 		label := randomBytes()
 
-		key, err := ctx.GenerateDSAKeyPair(id, label, params)
+		key, err := ctx.GenerateDSAKeyPairWithLabel(id, label, params)
 		require.NoError(t, err)
 		require.NotNil(t, key)
 		testDsaSigning(t, key, pSize, "hard1")
@@ -158,4 +158,24 @@ func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto
 	if !dsa.Verify(dsaPubkey, plaintextHash, sig.R, sig.S) {
 		t.Errorf("DSA %s Verify failed (psize %d hash %v)", what, psize, hashFunction)
 	}
+}
+
+func TestDsaRequiredArgs(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	_, err = ctx.GenerateDSAKeyPair(nil, dsaSizes[dsa.L2048N224])
+	require.Error(t, err)
+
+	val := randomBytes()
+
+	_, err = ctx.GenerateDSAKeyPairWithLabel(nil, val, dsaSizes[dsa.L2048N224])
+	require.Error(t, err)
+
+	_, err = ctx.GenerateDSAKeyPairWithLabel(val, nil, dsaSizes[dsa.L2048N224])
+	require.Error(t, err)
 }

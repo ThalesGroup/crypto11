@@ -58,7 +58,7 @@ func TestLoginContext(t *testing.T) {
 		// Generate a key and and close a session
 		const pSize = dsa.L1024N160
 		id := randomBytes()
-		key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
+		key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
 		require.NoError(t, err)
 		require.NotNil(t, key)
 
@@ -89,7 +89,7 @@ func TestLoginContext(t *testing.T) {
 		// Generate a key and and close a session
 		const pSize = dsa.L1024N160
 		id := randomBytes()
-		key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
+		key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
 		require.NoError(t, err)
 		require.NotNil(t, key)
 

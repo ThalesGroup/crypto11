@@ -66,7 +66,7 @@ type SymmetricCipher struct {
 
 // CipherAES describes the AES cipher. Use this with the
 // GenerateSecretKey... functions.
-var CipherAES = SymmetricCipher{
+var CipherAES = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_AES,
@@ -84,7 +84,7 @@ var CipherAES = SymmetricCipher{
 
 // CipherDES3 describes the three-key triple-DES cipher. Use this with the
 // GenerateSecretKey... functions.
-var CipherDES3 = SymmetricCipher{
+var CipherDES3 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_DES3,
@@ -106,7 +106,7 @@ var CipherDES3 = SymmetricCipher{
 // The spec promises that this mechanism can be used to perform HMAC
 // operations, although implementations vary;
 // CipherHMACSHA1 and so on may give better results.
-var CipherGeneric = SymmetricCipher{
+var CipherGeneric = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_GENERIC_SECRET,
@@ -123,7 +123,7 @@ var CipherGeneric = SymmetricCipher{
 
 // CipherHMACSHA1 describes the CKK_SHA_1_HMAC key type. Use this with the
 // GenerateSecretKey... functions.
-var CipherHMACSHA1 = SymmetricCipher{
+var CipherHMACSHA1 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_SHA_1_HMAC,
@@ -144,7 +144,7 @@ var CipherHMACSHA1 = SymmetricCipher{
 
 // CipherHMACSHA224 describes the CKK_SHA224_HMAC key type. Use this with the
 // GenerateSecretKey... functions.
-var CipherHMACSHA224 = SymmetricCipher{
+var CipherHMACSHA224 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_SHA224_HMAC,
@@ -165,7 +165,7 @@ var CipherHMACSHA224 = SymmetricCipher{
 
 // CipherHMACSHA256 describes the CKK_SHA256_HMAC key type. Use this with the
 // GenerateSecretKey... functions.
-var CipherHMACSHA256 = SymmetricCipher{
+var CipherHMACSHA256 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_SHA256_HMAC,
@@ -186,7 +186,7 @@ var CipherHMACSHA256 = SymmetricCipher{
 
 // CipherHMACSHA384 describes the CKK_SHA384_HMAC key type. Use this with the
 // GenerateSecretKey... functions.
-var CipherHMACSHA384 = SymmetricCipher{
+var CipherHMACSHA384 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_SHA384_HMAC,
@@ -207,7 +207,7 @@ var CipherHMACSHA384 = SymmetricCipher{
 
 // CipherHMACSHA512 describes the CKK_SHA512_HMAC key type. Use this with the
 // GenerateSecretKey... functions.
-var CipherHMACSHA512 = SymmetricCipher{
+var CipherHMACSHA512 = &SymmetricCipher{
 	GenParams: []SymmetricGenParams{
 		{
 			KeyType: pkcs11.CKK_SHA512_HMAC,
@@ -228,14 +228,14 @@ var CipherHMACSHA512 = SymmetricCipher{
 
 // Ciphers is a map of PKCS#11 key types (CKK_...) to symmetric cipher information.
 var Ciphers = map[int]*SymmetricCipher{
-	pkcs11.CKK_AES:            &CipherAES,
-	pkcs11.CKK_DES3:           &CipherDES3,
-	pkcs11.CKK_GENERIC_SECRET: &CipherGeneric,
-	pkcs11.CKK_SHA_1_HMAC:     &CipherHMACSHA1,
-	pkcs11.CKK_SHA224_HMAC:    &CipherHMACSHA224,
-	pkcs11.CKK_SHA256_HMAC:    &CipherHMACSHA256,
-	pkcs11.CKK_SHA384_HMAC:    &CipherHMACSHA384,
-	pkcs11.CKK_SHA512_HMAC:    &CipherHMACSHA512,
+	pkcs11.CKK_AES:            CipherAES,
+	pkcs11.CKK_DES3:           CipherDES3,
+	pkcs11.CKK_GENERIC_SECRET: CipherGeneric,
+	pkcs11.CKK_SHA_1_HMAC:     CipherHMACSHA1,
+	pkcs11.CKK_SHA224_HMAC:    CipherHMACSHA224,
+	pkcs11.CKK_SHA256_HMAC:    CipherHMACSHA256,
+	pkcs11.CKK_SHA384_HMAC:    CipherHMACSHA384,
+	pkcs11.CKK_SHA512_HMAC:    CipherHMACSHA512,
 }
 
 // PKCS11SecretKey contains a reference to a loaded PKCS#11 symmetric key object.
@@ -252,11 +252,32 @@ type PKCS11SecretKey struct {
 	Cipher *SymmetricCipher
 }
 
-// GenerateSecretKey creates an secret key of given length and type. The CKA_ID and CKA_LABEL attributes can be set by passing
-// non-nil values for id and label.
-//
-// The key will have a random label and ID.
-func (c *Context) GenerateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *PKCS11SecretKey, err error) {
+// GenerateSecretKey creates an secret key of given length and type. The id parameter is used to
+// set CKA_ID and must be non-nil.
+func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+
+	return c.generateSecretKey(id, nil, bits, cipher)
+}
+
+// GenerateSecretKey creates an secret key of given length and type. The id and label parameters are used to
+// set CKA_ID and CKA_LABEL respectively and must be non-nil.
+func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+	if err := notNilBytes(label, "label"); err != nil {
+		return nil, err
+	}
+
+	return c.generateSecretKey(id, label, bits, cipher)
+
+}
+
+// generateSecretKey creates an secret key of given length and type.
+func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *PKCS11SecretKey, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN

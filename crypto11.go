@@ -30,7 +30,7 @@
 // use. A Context is returned, which is then used to invoke operations
 // on the PKCS#11 token.
 //
-// 2. Create keys with GenerateDSAKeyPair, GenerateRSAKeyPair and
+// 2. Create keys with GenerateDSAKeyPairWithLabel, GenerateRSAKeyPair and
 // GenerateECDSAKeyPair. The keys you get back implement the standard
 // Go crypto.Signer interface (and crypto.Decrypter, for RSA). They
 // are automatically persisted under random a randomly generated label

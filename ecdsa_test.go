@@ -71,7 +71,7 @@ func TestHardECDSA(t *testing.T) {
 		id := randomBytes()
 		label := randomBytes()
 
-		key, err := ctx.GenerateECDSAKeyPair(id, label, curve)
+		key, err := ctx.GenerateECDSAKeyPairWithLabel(id, label, curve)
 		require.NoError(t, err)
 		require.NotNil(t, key)
 
@@ -110,4 +110,24 @@ func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash)
 		t.Errorf("ECDSA Verify (hash %v): %v", hashFunction, err)
 	}
 
+}
+
+func TestEcdsaRequiredArgs(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	_, err = ctx.GenerateECDSAKeyPair(nil, elliptic.P224())
+	require.Error(t, err)
+
+	val := randomBytes()
+
+	_, err = ctx.GenerateECDSAKeyPairWithLabel(nil, val, elliptic.P224())
+	require.Error(t, err)
+
+	_, err = ctx.GenerateECDSAKeyPairWithLabel(val, nil, elliptic.P224())
+	require.Error(t, err)
 }

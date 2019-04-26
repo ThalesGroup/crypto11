@@ -81,11 +81,34 @@ func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 	return &result, nil
 }
 
+// GenerateRSAKeyPair creates an RSA key pair on the token. The id parameter is used to
+// set CKA_ID and must be non-nil.
+func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+
+	return c.generateRSAKeyPair(id, nil, bits)
+}
+
+// GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
+// set CKA_ID and CKA_LABEL respectively and must be non-nil.
+func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+	if err := notNilBytes(label, "label"); err != nil {
+		return nil, err
+	}
+
+	return c.generateRSAKeyPair(id, label, bits)
+}
+
 // GenerateRSAKeyPair creates an RSA private key of given length. The CKA_ID and CKA_LABEL attributes can be set by passing
 // non-nil values for id and label.
 //
 // RSA private keys are generated with both sign and decrypt permissions, and a public exponent of 65537.
-func (c *Context) GenerateRSAKeyPair(id, label []byte, bits int) (k *PKCS11PrivateKeyRSA, err error) {
+func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k *PKCS11PrivateKeyRSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		publicKeyTemplate := []*pkcs11.Attribute{

@@ -41,7 +41,8 @@ func TestThreadedRSA(t *testing.T) {
 		require.NoError(t, ctx.Close())
 	}()
 
-	key, err := ctx.GenerateRSAKeyPair(nil, nil, 1024)
+	id := randomBytes()
+	key, err := ctx.GenerateRSAKeyPair(id, 1024)
 	require.NoError(t, err)
 
 	done := make(chan int)

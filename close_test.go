@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,7 @@ func TestClose(t *testing.T) {
 
 	const pSize = dsa.L1024N160
 	id := randomBytes()
-	key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
+	key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
 	require.NoError(t, err)
 	require.NotNil(t, key)
 
@@ -61,4 +62,8 @@ func randomBytes() []byte {
 	result := make([]byte, 32)
 	rand.Read(result)
 	return result
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }

@@ -48,7 +48,7 @@ func TestHardSymmetric(t *testing.T) {
 func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 
 	id := randomBytes()
-	key, err := ctx.GenerateSecretKey(id, nil, bits, Ciphers[keytype])
+	key, err := ctx.GenerateSecretKey(id, bits, Ciphers[keytype])
 	require.NoError(t, err)
 	require.NotNil(t, key)
 
@@ -242,7 +242,8 @@ func BenchmarkCBC(b *testing.B) {
 		require.NoError(b, ctx.Close())
 	}()
 
-	key, err := ctx.GenerateSecretKey(nil, nil, 128, Ciphers[pkcs11.CKK_AES])
+	id := randomBytes()
+	key, err := ctx.GenerateSecretKey(id, 128, Ciphers[pkcs11.CKK_AES])
 	require.NoError(b, err)
 
 	iv := make([]byte, 16)
@@ -277,6 +278,26 @@ func BenchmarkCBC(b *testing.B) {
 		}
 		runtime.GC()
 	})
+}
+
+func TestSymmetricRequiredArgs(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	_, err = ctx.GenerateSecretKey(nil, 128, CipherAES)
+	require.Error(t, err)
+
+	val := randomBytes()
+
+	_, err = ctx.GenerateSecretKeyWithLabel(nil, val, 128, CipherAES)
+	require.Error(t, err)
+
+	_, err = ctx.GenerateSecretKeyWithLabel(val, nil, 128, CipherAES)
+	require.Error(t, err)
 }
 
 // TODO BenchmarkGCM along the same lines as above

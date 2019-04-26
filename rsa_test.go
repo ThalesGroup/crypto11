@@ -75,7 +75,7 @@ func TestHardRSA(t *testing.T) {
 
 		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
 
-			key, err := ctx.GenerateRSAKeyPair(id, label, nbits)
+			key, err := ctx.GenerateRSAKeyPairWithLabel(id, label, nbits)
 			require.NoError(t, err)
 			require.NotNil(t, key)
 
@@ -270,4 +270,24 @@ func skipIfMechUnsupported(t *testing.T, ctx *Context, wantMech uint) {
 		}
 	}
 	t.Skipf("mechanism %v not supported", wantMech)
+}
+
+func TestRsaRequiredArgs(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	_, err = ctx.GenerateRSAKeyPair(nil, 2048)
+	require.Error(t, err)
+
+	val := randomBytes()
+
+	_, err = ctx.GenerateRSAKeyPairWithLabel(nil, val, 2048)
+	require.Error(t, err)
+
+	_, err = ctx.GenerateRSAKeyPairWithLabel(val, nil, 2048)
+	require.Error(t, err)
 }
