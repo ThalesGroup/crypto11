@@ -303,20 +303,3 @@ func (priv *PKCS11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto
 	})
 	return signature, err
 }
-
-// Validate checks an RSA key.
-//
-// Since the private key material is not normally available only very
-// limited validation is possible. (The underlying PKCS#11
-// implementation may perform stricter checking.)
-func (priv *PKCS11PrivateKeyRSA) Validate() error {
-	pub := priv.pubKey.(*rsa.PublicKey)
-	if pub.E < 2 {
-		return ErrMalformedRSAKey
-	}
-	// The software implementation actively rejects 'large' public
-	// exponents, in order to simplify its own implementation.
-	// Here, instead, we expect the PKCS#11 library to enforce its
-	// own preferred constraints, whatever they might be.
-	return nil
-}

@@ -76,9 +76,6 @@ func TestHardRSA(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, key)
 
-			err = key.Validate()
-			require.NoError(t, err)
-
 			var key2, key3 crypto.PrivateKey
 			var label, id []byte
 
