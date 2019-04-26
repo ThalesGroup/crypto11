@@ -31,9 +31,11 @@ import (
 
 // cipher.AEAD ----------------------------------------------------------
 
+type PaddingMode int
+
 const (
 	// PaddingNone represents a block cipher with no padding. (See NewCBC.)
-	PaddingNone = iota
+	PaddingNone PaddingMode = iota
 
 	// PaddingPKCS represents a block cipher used with PKCS#7 padding. (See NewCBC.)
 	PaddingPKCS
@@ -77,34 +79,33 @@ func (key *SecretKey) NewGCM() (g cipher.AEAD, err error) {
 // Despite the cipher.AEAD return type, there is no support for additional data and no authentication.
 // This method exists to provide a convenient way to do bulk (possibly padded) CBC encryption.
 // Think carefully before passing the cipher.AEAD to any consumer that expects authentication.
-func (key *SecretKey) NewCBC(paddingMode int) (g cipher.AEAD, err error) {
-	g = genericAead{
+func (key *SecretKey) NewCBC(paddingMode PaddingMode) (cipher.AEAD, error) {
+
+	var pkcsMech uint
+
+	switch paddingMode {
+	case PaddingNone:
+		pkcsMech = key.Cipher.CBCMech
+	case PaddingPKCS:
+		pkcsMech = key.Cipher.CBCPKCSMech
+	default:
+		return nil, errors.New("unrecognized padding mode")
+	}
+
+	g := genericAead{
 		key:       key,
 		overhead:  0,
 		nonceSize: key.BlockSize(),
-		makeMech: func(nonce []byte, additionalData []byte) (mech []*pkcs11.Mechanism, error error) {
+		makeMech: func(nonce []byte, additionalData []byte) ([]*pkcs11.Mechanism, error) {
 			if len(additionalData) > 0 {
-				err = errors.New("additional data not supported for CBC mode")
+				return nil, errors.New("additional data not supported for CBC mode")
 			}
-			var pkcsMech uint
-			switch paddingMode {
-			case PaddingNone:
-				pkcsMech = key.Cipher.CBCMech
-			case PaddingPKCS:
-				pkcsMech = key.Cipher.CBCPKCSMech
-			default:
-				err = errors.New("unrecognized padding mode")
-				return
-			}
-			if pkcsMech == 0 {
-				err = errors.New("unsupported padding mode")
-				return
-			}
-			mech = []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcsMech, nonce)}
-			return
+
+			return []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcsMech, nonce)}, nil
 		},
 	}
-	return
+
+	return g, nil
 }
 
 func (g genericAead) NonceSize() int {
