@@ -24,7 +24,6 @@ package crypto11
 import (
 	"C"
 	"encoding/asn1"
-	"encoding/hex"
 	"errors"
 	"math/big"
 	"unsafe"
@@ -39,8 +38,6 @@ var ErrMalformedDER = errors.New("crypto11: malformed DER message")
 // means the PKCS#11 library has returned an empty or odd-length byte
 // string.
 var ErrMalformedSignature = errors.New("crypto11xo: malformed signature")
-
-const labelLength = 64
 
 func ulongToBytes(n uint) []byte {
 	return C.GoBytes(unsafe.Pointer(&n), C.sizeof_ulong) // ugh!
@@ -117,20 +114,4 @@ func (c *Context) dsaGeneric(key pkcs11.ObjectHandle, mechanism uint, digest []b
 	}
 
 	return sig.marshalDER()
-}
-
-// Pick a random label for a key
-func (c *Context) generateKeyLabel() ([]byte, error) {
-	rawLabel := make([]byte, labelLength/2)
-	rand := c.NewRandomReader()
-	sz, err := rand.Read(rawLabel)
-	if err != nil {
-		return nil, err
-	}
-	if sz < len(rawLabel) {
-		return nil, ErrCannotGetRandomData
-	}
-	label := make([]byte, labelLength)
-	hex.Encode(label, rawLabel)
-	return label, nil
 }

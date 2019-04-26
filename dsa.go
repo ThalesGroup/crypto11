@@ -63,69 +63,58 @@ func exportDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 	return &result, nil
 }
 
-// GenerateDSAKeyPair creates a DSA private key on the default slot
-//
-// The key will have a random label and ID.
-func (c *Context) GenerateDSAKeyPair(params *dsa.Parameters) (k *PKCS11PrivateKeyDSA, err error) {
+// GenerateDSAKeyPair creates a DSA private key on the token. The CKA_ID and CKA_LABEL attributes can be set by passing
+// non-nil values for id and label.
+func (c *Context) GenerateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *PKCS11PrivateKeyDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
-		k, err = generateDSAKeyPairOnSession(session, c, nil, nil, params)
-		return err
+		p := params.P.Bytes()
+		q := params.Q.Bytes()
+		g := params.G.Bytes()
+
+		publicKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_DSA),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+			pkcs11.NewAttribute(pkcs11.CKA_PRIME, p),
+			pkcs11.NewAttribute(pkcs11.CKA_SUBPRIME, q),
+			pkcs11.NewAttribute(pkcs11.CKA_BASE, g),
+		}
+
+		privateKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		}
+
+		if id != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+		}
+
+		if label != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+		}
+
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_DSA_KEY_PAIR_GEN, nil)}
+		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
+			mech,
+			publicKeyTemplate,
+			privateKeyTemplate)
+		if err != nil {
+			return err
+		}
+		pub, err := exportDSAPublicKey(session, pubHandle)
+		if err != nil {
+			return err
+		}
+		k = &PKCS11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		return nil
+
 	})
 	return
-}
-
-// generateDSAKeyPairOnSession creates a DSA private key using a specified session
-//
-// Either or both label and/or id can be nil, in which case random values will be generated.
-func generateDSAKeyPairOnSession(session *pkcs11Session, ctx *Context, id []byte, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
-	var err error
-	var pub crypto.PublicKey
-
-	if label == nil {
-		if label, err = ctx.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	if id == nil {
-		if id, err = ctx.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	p := params.P.Bytes()
-	q := params.Q.Bytes()
-	g := params.G.Bytes()
-	publicKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_DSA),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
-		pkcs11.NewAttribute(pkcs11.CKA_PRIME, p),
-		pkcs11.NewAttribute(pkcs11.CKA_SUBPRIME, q),
-		pkcs11.NewAttribute(pkcs11.CKA_BASE, g),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-	}
-	privateKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-	}
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_DSA_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
-		mech,
-		publicKeyTemplate,
-		privateKeyTemplate)
-	if err != nil {
-		return nil, err
-	}
-	if pub, err = exportDSAPublicKey(session, pubHandle); err != nil {
-		return nil, err
-	}
-	priv := PKCS11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, ctx}, pub}}
-	return &priv, nil
 }
 
 // Sign signs a message using a DSA key.

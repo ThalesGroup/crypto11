@@ -70,9 +70,12 @@ func TestHardRSA(t *testing.T) {
 	}()
 
 	for _, nbits := range rsaSizes {
+		id := randomBytes()
+		label := randomBytes()
+
 		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
 
-			key, err := ctx.GenerateRSAKeyPair(nbits)
+			key, err := ctx.GenerateRSAKeyPair(id, label, nbits)
 			require.NoError(t, err)
 			require.NotNil(t, key)
 
@@ -82,10 +85,6 @@ func TestHardRSA(t *testing.T) {
 			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, false) })
 			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, false) })
 			t.Run("FindId", func(t *testing.T) {
-				// Get a fresh handle to  the key
-				id, label, err = key.Identify()
-				require.NoError(t, err)
-
 				key2, err = ctx.FindKeyPair(id, nil)
 				require.NoError(t, err)
 			})

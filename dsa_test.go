@@ -111,14 +111,13 @@ func TestHardDSA(t *testing.T) {
 
 	for pSize, params := range dsaSizes {
 
-		key, err := ctx.GenerateDSAKeyPair(params)
+		id := randomBytes()
+		label := randomBytes()
+
+		key, err := ctx.GenerateDSAKeyPair(id, label, params)
 		require.NoError(t, err)
 		require.NotNil(t, key)
 		testDsaSigning(t, key, pSize, "hard1")
-
-		// Get a fresh handle to  the key
-		id, label, err := key.Identify()
-		require.NoError(t, err)
 
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)

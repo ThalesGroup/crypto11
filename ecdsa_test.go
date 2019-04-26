@@ -68,7 +68,10 @@ func TestHardECDSA(t *testing.T) {
 	}()
 
 	for _, curve := range curves {
-		key, err := ctx.GenerateECDSAKeyPair(curve)
+		id := randomBytes()
+		label := randomBytes()
+
+		key, err := ctx.GenerateECDSAKeyPair(id, label, curve)
 		require.NoError(t, err)
 		require.NotNil(t, key)
 
@@ -77,10 +80,6 @@ func TestHardECDSA(t *testing.T) {
 		testEcdsaSigning(t, key, crypto.SHA256)
 		testEcdsaSigning(t, key, crypto.SHA384)
 		testEcdsaSigning(t, key, crypto.SHA512)
-
-		// Get a fresh handle to  the key
-		id, label, err := key.Identify()
-		require.NoError(t, err)
 
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)

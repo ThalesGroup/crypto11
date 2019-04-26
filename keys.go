@@ -27,23 +27,6 @@ import (
 	"github.com/miekg/pkcs11"
 )
 
-// Identify returns the ID and label for a PKCS#11 object.
-//
-// Either of these values may be used to retrieve the key for later use.
-func (object *pkcs11Object) Identify() (id []byte, label []byte, err error) {
-	a := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
-	}
-	if err = object.context.withSession(func(session *pkcs11Session) error {
-		a, err = object.context.ctx.GetAttributeValue(session.handle, object.handle, a)
-		return err
-	}); err != nil {
-		return nil, nil, err
-	}
-	return a[0].Value, a[1].Value, nil
-}
-
 // Find a key object.  For asymmetric keys this only finds one half so
 // callers will call it twice.
 func findKey(session *pkcs11Session, id []byte, label []byte, keyclass uint, keytype uint) (obj pkcs11.ObjectHandle, err error) {

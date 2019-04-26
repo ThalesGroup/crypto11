@@ -81,73 +81,57 @@ func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 	return &result, nil
 }
 
-// GenerateRSAKeyPair creates an RSA private key of given length.
+// GenerateRSAKeyPair creates an RSA private key of given length. The CKA_ID and CKA_LABEL attributes can be set by passing
+// non-nil values for id and label.
 //
-// The key will have a random label and ID.
-//
-// RSA private keys are generated with both sign and decrypt
-// permissions, and a public exponent of 65537.
-func (c *Context) GenerateRSAKeyPair(bits int) (k *PKCS11PrivateKeyRSA, err error) {
+// RSA private keys are generated with both sign and decrypt permissions, and a public exponent of 65537.
+func (c *Context) GenerateRSAKeyPair(id, label []byte, bits int) (k *PKCS11PrivateKeyRSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
-		k, err = c.generateRSAKeyPairOnSession(session, nil, nil, bits)
-		return err
+
+		publicKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
+			pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
+			pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, bits),
+		}
+		privateKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		}
+
+		if id != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+		}
+
+		if label != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+		}
+
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
+		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
+			mech,
+			publicKeyTemplate,
+			privateKeyTemplate)
+		if err != nil {
+			return err
+		}
+
+		pub, err := exportRSAPublicKey(session, pubHandle)
+		if err != nil {
+			return err
+		}
+		k = &PKCS11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		return nil
 	})
 	return
-}
-
-// generateRSAKeyPairOnSession creates an RSA private key of given length, on a specified session.
-//
-// Either or both label and/or id can be nil, in which case random values will be generated.
-//
-// RSA private keys are generated with both sign and decrypt
-// permissions, and a public exponent of 65537.
-func (c *Context) generateRSAKeyPairOnSession(session *pkcs11Session, id []byte, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
-	var err error
-	var pub crypto.PublicKey
-
-	if label == nil {
-		if label, err = c.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	if id == nil {
-		if id, err = c.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	publicKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
-		pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
-		pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
-		pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, bits),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-	}
-	privateKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-	}
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
-		mech,
-		publicKeyTemplate,
-		privateKeyTemplate)
-	if err != nil {
-		return nil, err
-	}
-	if pub, err = exportRSAPublicKey(session, pubHandle); err != nil {
-		return nil, err
-	}
-	priv := PKCS11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
-	return &priv, nil
 }
 
 // Decrypt decrypts a message using a RSA key.

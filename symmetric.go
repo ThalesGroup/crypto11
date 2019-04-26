@@ -22,6 +22,8 @@
 package crypto11
 
 import (
+	"errors"
+
 	"github.com/miekg/pkcs11"
 )
 
@@ -250,74 +252,57 @@ type PKCS11SecretKey struct {
 	Cipher *SymmetricCipher
 }
 
-// Key generation -------------------------------------------------------------
-
-// GenerateSecretKey creates an secret key of given length and type.
+// GenerateSecretKey creates an secret key of given length and type. The CKA_ID and CKA_LABEL attributes can be set by passing
+// non-nil values for id and label.
 //
 // The key will have a random label and ID.
-func (c *Context) GenerateSecretKey(bits int, cipher *SymmetricCipher) (*PKCS11SecretKey, error) {
-	var k *PKCS11SecretKey
-	var err error
+func (c *Context) GenerateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *PKCS11SecretKey, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
-		k, err = c.generateSecretKeyOnSession(session, c.slot, nil, nil, bits, cipher)
-		return err
-	})
-	return k, err
-}
 
-// generateSecretKeyOnSession creates a symmetric key of given type and
-// length, on a specified session.
-//
-// Either or both label and/or id can be nil, in which case random values will be generated.
-func (c *Context) generateSecretKeyOnSession(session *pkcs11Session, slot uint, id []byte, label []byte, bits int, cipher *SymmetricCipher) (key *PKCS11SecretKey, err error) {
-	// TODO refactor with the other key generation implementations
-	if label == nil {
-		if label, err = c.generateKeyLabel(); err != nil {
-			return nil, err
+		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
+		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
+		// vendor-specific mechanisms.
+		for _, genMech := range cipher.GenParams {
+			secretKeyTemplate := []*pkcs11.Attribute{
+				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
+				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+				pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
+				pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
+				pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt),
+				pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
+				pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+			}
+
+			if id != nil {
+				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+			}
+			if label != nil {
+				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+			}
+
+			if bits > 0 {
+				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
+			}
+			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
+
+			privHandle, err := session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
+			if err == nil {
+				k = &PKCS11SecretKey{pkcs11Object{privHandle, c}, cipher}
+				return nil
+			}
+
+			// nShield returns this if if doesn't like the CKK/CKM combination.
+			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_TEMPLATE_INCONSISTENT {
+				continue
+			}
+
+			return err
 		}
-	}
-	if id == nil {
-		if id, err = c.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	var privHandle pkcs11.ObjectHandle
-	// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
-	// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
-	// vendor-specific mechanisms.
-	for _, genMech := range cipher.GenParams {
-		secretKeyTemplate := []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
-			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
-			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-			pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
-			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
-			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt),
-			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
-			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-			pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-			pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-		}
-		if bits > 0 {
-			secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
-		}
-		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
-		privHandle, err = session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
-		if err == nil {
-			break
-		}
-		// nShield returns this if if doesn't like the CKK/CKM combination.
-		if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_TEMPLATE_INCONSISTENT {
-			continue
-		}
-		if err != nil {
-			return
-		}
-	}
-	if err != nil {
-		return
-	}
-	key = &PKCS11SecretKey{pkcs11Object{privHandle, c}, cipher}
+
+		// We can only get here if there were no GenParams
+		return errors.New("crypto11: cipher must have GenParams")
+	})
 	return
 }

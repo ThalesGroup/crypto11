@@ -24,6 +24,7 @@ package crypto11
 import (
 	"crypto/dsa"
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,12 +37,10 @@ func TestClose(t *testing.T) {
 	require.NoError(t, err)
 
 	const pSize = dsa.L1024N160
-	key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
+	id := randomBytes()
+	key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
 	require.NoError(t, err)
 	require.NotNil(t, key)
-
-	id, _, err := key.Identify()
-	require.NoError(t, err)
 
 	require.NoError(t, ctx.Close())
 
@@ -55,4 +54,11 @@ func TestClose(t *testing.T) {
 		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
 		require.NoError(t, ctx.Close())
 	}
+}
+
+// randomBytes returns 32 random bytes.
+func randomBytes() []byte {
+	result := make([]byte, 32)
+	rand.Read(result)
+	return result
 }

@@ -215,74 +215,59 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 	return &pub, nil
 }
 
-// GenerateECDSAKeyPair creates an ECDSA private key using curve c.
-//
-// The key will have a random label and ID.
+// GenerateECDSAKeyPair creates an ECDSA private key using curve c. The CKA_ID and CKA_LABEL attributes can be set by passing
+// non-nil values for id and label.
 //
 // Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPair(curve elliptic.Curve) (k *PKCS11PrivateKeyECDSA, err error) {
+func (c *Context) GenerateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (k *PKCS11PrivateKeyECDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
-		k, err = generateECDSAKeyPairOnSession(session, c, nil, nil, curve)
-		return err
+
+		parameters, err := marshalEcParams(curve)
+		if err != nil {
+			return err
+		}
+		publicKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
+			pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, parameters),
+		}
+		privateKeyTemplate := []*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		}
+
+		if id != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+		}
+
+		if label != nil {
+			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+		}
+
+		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
+		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
+			mech,
+			publicKeyTemplate,
+			privateKeyTemplate)
+		if err != nil {
+			return err
+		}
+
+		pub, err := exportECDSAPublicKey(session, pubHandle)
+		if err != nil {
+			return err
+		}
+		k = &PKCS11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		return nil
 	})
 	return
-}
-
-// generateECDSAKeyPairOnSession creates an ECDSA private key using curve c, using a specified session.
-//
-// label and/or id can be nil, in which case random values will be generated.
-//
-// Only a limited set of named elliptic curves are supported. The
-// underlying PKCS#11 implementation may impose further restrictions.
-func generateECDSAKeyPairOnSession(session *pkcs11Session, ctx *Context, id []byte, label []byte, c elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
-	var err error
-	var parameters []byte
-	var pub crypto.PublicKey
-
-	if label == nil {
-		if label, err = ctx.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	if id == nil {
-		if id, err = ctx.generateKeyLabel(); err != nil {
-			return nil, err
-		}
-	}
-	if parameters, err = marshalEcParams(c); err != nil {
-		return nil, err
-	}
-	publicKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
-		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-		pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, parameters),
-	}
-	privateKeyTemplate := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
-		pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-		pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-		pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-	}
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
-	pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
-		mech,
-		publicKeyTemplate,
-		privateKeyTemplate)
-	if err != nil {
-		return nil, err
-	}
-	if pub, err = exportECDSAPublicKey(session, pubHandle); err != nil {
-		return nil, err
-	}
-	priv := PKCS11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, ctx}, pub}}
-	return &priv, nil
 }
 
 // Sign signs a message using an ECDSA key.

@@ -57,7 +57,7 @@ func TestHmac(t *testing.T) {
 
 func testHmac(t *testing.T, ctx *Context, keytype int, mech int, length int, xlength int, full bool) {
 
-	key, err := ctx.GenerateSecretKey(256, Ciphers[keytype])
+	key, err := ctx.GenerateSecretKey(nil, nil, 256, Ciphers[keytype])
 	require.NoError(t, err)
 	require.NotNil(t, key)
 

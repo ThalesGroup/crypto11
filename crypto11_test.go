@@ -57,12 +57,10 @@ func TestLoginContext(t *testing.T) {
 
 		// Generate a key and and close a session
 		const pSize = dsa.L1024N160
-		key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
+		id := randomBytes()
+		key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
 		require.NoError(t, err)
 		require.NotNil(t, key)
-
-		id, _, err := key.Identify()
-		require.NoError(t, err)
 
 		err = ctx.Close()
 		require.NoError(t, err)
@@ -90,12 +88,10 @@ func TestLoginContext(t *testing.T) {
 
 		// Generate a key and and close a session
 		const pSize = dsa.L1024N160
-		key, err := ctx.GenerateDSAKeyPair(dsaSizes[pSize])
+		id := randomBytes()
+		key, err := ctx.GenerateDSAKeyPair(id, nil, dsaSizes[pSize])
 		require.NoError(t, err)
 		require.NotNil(t, key)
-
-		id, _, err := key.Identify()
-		require.NoError(t, err)
 
 		// TODO - need to examine this test in more detail to see what it accomplishes
 		err = ctx.withSession(func(s1 *pkcs11Session) error {
