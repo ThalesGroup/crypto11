@@ -115,9 +115,6 @@ var ErrKeyNotFound = errors.New("crypto11: could not find PKCS#11 key")
 // ErrCannotOpenPKCS11 is returned when the PKCS#11 library cannot be opened
 var ErrCannotOpenPKCS11 = errors.New("crypto11: could not open PKCS#11")
 
-// ErrCannotGetRandomData is returned when the PKCS#11 library fails to return enough random data
-var ErrCannotGetRandomData = errors.New("crypto11: cannot get random data from PKCS#11")
-
 // ErrUnsupportedKeyType is returned when the PKCS#11 library returns a key type that isn't supported
 var ErrUnsupportedKeyType = errors.New("crypto11: unrecognized key type")
 
