@@ -32,8 +32,8 @@ import (
 	pkcs11 "github.com/miekg/pkcs11"
 )
 
-// PKCS11PrivateKeyDSA contains a reference to a loaded PKCS#11 DSA private key object.
-type PKCS11PrivateKeyDSA struct {
+// pkcs11PrivateKeyDSA contains a reference to a loaded PKCS#11 DSA private key object.
+type pkcs11PrivateKeyDSA struct {
 	pkcs11PrivateKey
 }
 
@@ -74,7 +74,7 @@ func notNilBytes(obj []byte, name string) error {
 
 // GenerateDSAKeyPair creates a DSA key pair on the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
-func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (crypto.Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (*PKCS11
 
 // GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
-func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Parameters) (*PKCS11PrivateKeyDSA, error) {
+func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Parameters) (crypto.Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 }
 
 // generateDSAKeyPair creates a DSA private key on the token.
-func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *PKCS11PrivateKeyDSA, err error) {
+func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 		p := params.P.Bytes()
 		q := params.Q.Bytes()
@@ -141,7 +141,7 @@ func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (
 		if err != nil {
 			return err
 		}
-		k = &PKCS11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		k = &pkcs11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 		return nil
 
 	})
@@ -150,11 +150,11 @@ func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (
 
 // Sign signs a message using a DSA key.
 //
-// This completes the implemention of crypto.Signer for PKCS11PrivateKeyDSA.
+// This completes the implemention of crypto.Signer for pkcs11PrivateKeyDSA.
 //
 // PKCS#11 expects to pick its own random data for signatures, so the rand argument is ignored.
 //
 // The return value is a DER-encoded byteblock.
-func (signer *PKCS11PrivateKeyDSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+func (signer *pkcs11PrivateKeyDSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	return signer.context.dsaGeneric(signer.handle, pkcs11.CKM_DSA, digest)
 }

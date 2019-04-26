@@ -74,7 +74,7 @@ func TestLoginContext(t *testing.T) {
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)
 
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
+		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
 	})
 
 	t.Run("login context shared between sessions", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestLoginContext(t *testing.T) {
 			return ctx.withSession(func(s2 *pkcs11Session) error {
 				key2, err := ctx.FindKeyPair(id, nil)
 				require.NoError(t, err)
-				testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
+				testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
 				return nil
 			})
 		})

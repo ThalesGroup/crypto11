@@ -92,7 +92,7 @@ func TestHardRSA(t *testing.T) {
 				if key2 == nil {
 					t.SkipNow()
 				}
-				testRsaSigning(t, key2.(*PKCS11PrivateKeyRSA), nbits, false)
+				testRsaSigning(t, key2.(*pkcs11PrivateKeyRSA), nbits, false)
 			})
 			t.Run("FindLabel", func(t *testing.T) {
 				key3, err = ctx.FindKeyPair(nil, label)
@@ -150,7 +150,7 @@ func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash
 	var sig []byte
 
 	if !native {
-		skipIfMechUnsupported(t, key.(*PKCS11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
+		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
 	}
 
 	plaintext := []byte("sign me with PSS")
@@ -232,10 +232,10 @@ func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 
 func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction crypto.Hash, label []byte, native bool) {
 	if !native {
-		skipIfMechUnsupported(t, key.(*PKCS11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_OAEP)
+		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_OAEP)
 
 		// Doesn't seem to be a way to query supported MGFs so we do that the hard way.
-		info, err := key.(*PKCS11PrivateKeyRSA).context.ctx.GetInfo()
+		info, err := key.(*pkcs11PrivateKeyRSA).context.ctx.GetInfo()
 		require.NoError(t, err)
 
 		if info.ManufacturerID == "SoftHSM" && (hashFunction != crypto.SHA1 || len(label) > 0) {

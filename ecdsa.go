@@ -44,8 +44,8 @@ var ErrUnsupportedEllipticCurve = errors.New("crypto11/ecdsa: unsupported ellipt
 // decode a point.
 var ErrMalformedPoint = errors.New("crypto11/ecdsa: malformed elliptic curve point")
 
-// PKCS11PrivateKeyECDSA contains a reference to a loaded PKCS#11 ECDSA private key object.
-type PKCS11PrivateKeyECDSA struct {
+// pkcs11PrivateKeyECDSA contains a reference to a loaded PKCS#11 ECDSA private key object.
+type pkcs11PrivateKeyECDSA struct {
 	pkcs11PrivateKey
 }
 
@@ -218,7 +218,7 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 // GenerateECDSAKeyPair creates a ECDSA key pair on the token using curve c. The id parameter is used to
 // set CKA_ID and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (crypto.Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (*PKCS11
 // GenerateECDSAKeyPairWithLabel creates a ECDSA key pair on the token using curve c. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil. Only a limited set of named elliptic curves are supported. The
 // underlying PKCS#11 implementation may impose further restrictions.
-func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (*PKCS11PrivateKeyECDSA, error) {
+func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (crypto.Signer, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 }
 
 // generateECDSAKeyPair generates a key pair on the token.
-func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (k *PKCS11PrivateKeyECDSA, err error) {
+func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (k *pkcs11PrivateKeyECDSA, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		parameters, err := marshalEcParams(curve)
@@ -285,7 +285,7 @@ func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (
 		if err != nil {
 			return err
 		}
-		k = &PKCS11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		k = &pkcs11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 		return nil
 	})
 	return
@@ -293,11 +293,11 @@ func (c *Context) generateECDSAKeyPair(id, label []byte, curve elliptic.Curve) (
 
 // Sign signs a message using an ECDSA key.
 //
-// This completes the implemention of crypto.Signer for PKCS11PrivateKeyECDSA.
+// This completes the implemention of crypto.Signer for pkcs11PrivateKeyECDSA.
 //
 // PKCS#11 expects to pick its own random data where necessary for signatures, so the rand argument is ignored.
 //
 // The return value is a DER-encoded byteblock.
-func (signer *PKCS11PrivateKeyECDSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (signer *pkcs11PrivateKeyECDSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	return signer.context.dsaGeneric(signer.handle, pkcs11.CKM_ECDSA, digest)
 }

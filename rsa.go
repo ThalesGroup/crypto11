@@ -45,8 +45,16 @@ var ErrMalformedRSAKey = errors.New("crypto11/rsa: malformed RSA key")
 // requested.
 var ErrUnsupportedRSAOptions = errors.New("crypto11/rsa: unsupported RSA option value")
 
-// PKCS11PrivateKeyRSA contains a reference to a loaded PKCS#11 RSA private key object.
-type PKCS11PrivateKeyRSA struct {
+// SignerDecrypter implements crypto.Signer and crypto.Decrypter.
+type SignerDecrypter interface {
+	crypto.Signer
+
+	// Decrypt implements crypto.Decrypter.
+	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
+}
+
+// pkcs11PrivateKeyRSA contains a reference to a loaded PKCS#11 RSA private key object.
+type pkcs11PrivateKeyRSA struct {
 	pkcs11PrivateKey
 }
 
@@ -83,7 +91,7 @@ func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 
 // GenerateRSAKeyPair creates an RSA key pair on the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
-func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
+func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -93,7 +101,7 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (*PKCS11PrivateKeyRSA,
 
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
-func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (*PKCS11PrivateKeyRSA, error) {
+func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (SignerDecrypter, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -108,7 +116,7 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (*PKCS
 // non-nil values for id and label.
 //
 // RSA private keys are generated with both sign and decrypt permissions, and a public exponent of 65537.
-func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k *PKCS11PrivateKeyRSA, err error) {
+func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecrypter, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		publicKeyTemplate := []*pkcs11.Attribute{
@@ -151,7 +159,7 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k *PKCS11Priva
 		if err != nil {
 			return err
 		}
-		k = &PKCS11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+		k = &pkcs11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 		return nil
 	})
 	return
@@ -159,12 +167,12 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k *PKCS11Priva
 
 // Decrypt decrypts a message using a RSA key.
 //
-// This completes the implemention of crypto.Decrypter for PKCS11PrivateKeyRSA.
+// This completes the implemention of crypto.Decrypter for pkcs11PrivateKeyRSA.
 //
 // Note that the SessionKeyLen option (for PKCS#1v1.5 decryption) is not supported.
 //
 // The underlying PKCS#11 implementation may impose further restrictions.
-func (priv *PKCS11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, options crypto.DecrypterOpts) (plaintext []byte, err error) {
+func (priv *pkcs11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, options crypto.DecrypterOpts) (plaintext []byte, err error) {
 	err = priv.context.withSession(func(session *pkcs11Session) error {
 		if options == nil {
 			plaintext, err = decryptPKCS1v15(session, priv, ciphertext, 0)
@@ -183,7 +191,7 @@ func (priv *PKCS11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, opti
 	return plaintext, err
 }
 
-func decryptPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
+func decryptPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
 	if sessionKeyLen != 0 {
 		return nil, ErrUnsupportedRSAOptions
 	}
@@ -194,7 +202,7 @@ func decryptPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, ciphertex
 	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
-func decryptOAEP(session *pkcs11Session, key *PKCS11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash, label []byte) ([]byte, error) {
+func decryptOAEP(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash, label []byte) ([]byte, error) {
 	var err error
 	var hMech, mgf, sourceData, sourceDataLen uint
 	if hMech, mgf, _, err = hashToPKCS11(hashFunction); err != nil {
@@ -233,7 +241,7 @@ func hashToPKCS11(hashFunction crypto.Hash) (uint, uint, uint, error) {
 	}
 }
 
-func signPSS(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
+func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
 	var hMech, mgf, hLen, sLen uint
 	var err error
 	if hMech, mgf, hLen, err = hashToPKCS11(opts.Hash); err != nil {
@@ -270,7 +278,7 @@ var pkcs1Prefix = map[crypto.Hash][]byte{
 	crypto.SHA512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
 }
 
-func signPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byte, hash crypto.Hash) (signature []byte, err error) {
+func signPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, hash crypto.Hash) (signature []byte, err error) {
 	/* Calculate T for EMSA-PKCS1-v1_5. */
 	oid := pkcs1Prefix[hash]
 	T := make([]byte, len(oid)+len(digest))
@@ -286,7 +294,7 @@ func signPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byt
 
 // Sign signs a message using a RSA key.
 //
-// This completes the implemention of crypto.Signer for PKCS11PrivateKeyRSA.
+// This completes the implemention of crypto.Signer for pkcs11PrivateKeyRSA.
 //
 // PKCS#11 expects to pick its own random data where necessary for signatures, so the rand argument is ignored.
 //
@@ -295,7 +303,7 @@ func signPKCS1v15(session *pkcs11Session, key *PKCS11PrivateKeyRSA, digest []byt
 // crypto.rsa.PSSSaltLengthEqualsHash (recommended) or pass an
 // explicit salt length. Moreover the underlying PKCS#11
 // implementation may impose further restrictions.
-func (priv *PKCS11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+func (priv *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	if err != nil {
 		return nil, err
 	}

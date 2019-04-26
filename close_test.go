@@ -52,7 +52,7 @@ func TestClose(t *testing.T) {
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)
 
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
+		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
 		require.NoError(t, ctx.Close())
 	}
 }

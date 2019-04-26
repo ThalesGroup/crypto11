@@ -121,7 +121,7 @@ func TestHardDSA(t *testing.T) {
 
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), pSize, "hard2")
+		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, "hard2")
 
 		key3, err := ctx.FindKeyPair(nil, label)
 		require.NoError(t, err)

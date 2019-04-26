@@ -38,8 +38,8 @@
 //
 // 3. Retrieve existing keys with FindKeyPair. The returned value is a
 // Go crypto.PrivateKey; it may be converted either to crypto.Signer
-// or to *PKCS11PrivateKeyDSA, *PKCS11PrivateKeyECDSA or
-// *PKCS11PrivateKeyRSA.
+// or to *pkcs11PrivateKeyDSA, *pkcs11PrivateKeyECDSA or
+// *pkcs11PrivateKeyRSA.
 //
 // Sessions and concurrency
 //

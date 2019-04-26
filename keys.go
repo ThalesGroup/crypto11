@@ -92,19 +92,19 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (k crypto.PrivateKey, err
 			if pub, err = exportDSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &PKCS11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 
 		case pkcs11.CKK_RSA:
 			if pub, err = exportRSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &PKCS11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyRSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 
 		case pkcs11.CKK_ECDSA:
 			if pub, err = exportECDSAPublicKey(session, pubHandle); err != nil {
 				return err
 			}
-			k = &PKCS11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
+			k = &pkcs11PrivateKeyECDSA{pkcs11PrivateKey{pkcs11Object{privHandle, c}, pub}}
 
 		default:
 			return ErrUnsupportedKeyType
