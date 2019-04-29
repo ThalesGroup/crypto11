@@ -24,6 +24,5 @@ script:
  - cat softhsm2.conf
  - mkdir tokens
  - export SOFTHSM2_CONF=`pwd`/softhsm2.conf
- - softhsm2-util --init-token --slot 0 --label test --so-pin sopassword --pin password
- - cp configs/config.softhsm2 config
+ - softhsm2-util --init-token --slot 0 --label token1 --so-pin sopassword --pin password
  - go test -mod readonly -v -bench .
