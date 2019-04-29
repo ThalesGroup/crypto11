@@ -28,8 +28,6 @@ To verify signatures or encrypt messages, retrieve the public key and do it in s
 See [the documentation](https://godoc.org/github.com/ThalesIgnite/crypto11) for details of various limitations,
 especially regarding symmetric crypto.
 
-There is a demo web server in the `demo` directory, which publishes
-the contents of `/usr/share/doc`.
 
 Installation
 ============
