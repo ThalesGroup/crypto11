@@ -162,36 +162,23 @@ func unmarshalEcParams(b []byte) (elliptic.Curve, error) {
 	return nil, ErrUnsupportedEllipticCurve
 }
 
-func unmarshalEcPoint(b []byte, c elliptic.Curve) (x *big.Int, y *big.Int, err error) {
-	// Decoding an octet string in isolation seems to be too hard
-	// with encoding.asn1, so we do it manually. Look away now.
-	if b[0] != 4 {
+func unmarshalEcPoint(b []byte, c elliptic.Curve) (*big.Int, *big.Int, error) {
+	var pointBytes []byte
+	extra, err := asn1.Unmarshal(b, &pointBytes)
+	if err != nil {
 		return nil, nil, ErrMalformedDER
 	}
-	var l, r int
-	if b[1] < 128 {
-		l = int(b[1])
-		r = 2
-	} else {
-		ll := int(b[1] & 127)
-		if ll > 2 { // unreasonably long
-			return nil, nil, ErrMalformedDER
-		}
-		l = 0
-		for i := int(0); i < ll; i++ {
-			l = 256*l + int(b[2+i])
-		}
-		r = ll + 2
-	}
-	if r+l > len(b) {
+
+	if len(extra) > 0 {
+		// We weren't expecting extra data
 		return nil, nil, ErrMalformedDER
 	}
-	pointBytes := b[r:]
-	x, y = elliptic.Unmarshal(c, pointBytes)
+
+	x, y := elliptic.Unmarshal(c, pointBytes)
 	if x == nil || y == nil {
-		err = ErrMalformedPoint
+		return nil, nil, ErrMalformedPoint
 	}
-	return
+	return x, y, nil
 }
 
 // Export the public key corresponding to a private ECDSA key.
