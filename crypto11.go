@@ -91,7 +91,6 @@ import (
 	"crypto"
 	"encoding/json"
 	"io"
-	"log"
 	"os"
 	"time"
 
@@ -279,27 +278,23 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	if instance.ctx == nil {
-		log.Printf("Could not open PKCS#11 library: %s", config.Path)
 		return nil, ErrCannotOpenPKCS11
 	}
 	if err := instance.ctx.Initialize(); err != nil {
-		log.Printf("Failed to initialize PKCS#11 library: %s", err.Error())
 		instance.ctx.Destroy()
-		return nil, err
+		return nil, errors.WithMessage(err, "failed to initialize PKCS#11 library")
 	}
 	slots, err := instance.ctx.GetSlotList(true)
 	if err != nil {
 		_ = instance.ctx.Finalize()
 		instance.ctx.Destroy()
-		log.Printf("Failed to list PKCS#11 Slots: %s", err.Error())
-		return nil, err
+		return nil, errors.WithMessage(err, "failed to list PKCS#11 slots")
 	}
 
 	instance.slot, instance.token, err = instance.findToken(slots, config.TokenSerial, config.TokenLabel, config.SlotNumber)
 	if err != nil {
 		_ = instance.ctx.Finalize()
 		instance.ctx.Destroy()
-		log.Printf("Failed to find Token in any Slot: %s", err.Error())
 		return nil, err
 	}
 
