@@ -141,7 +141,9 @@ func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto
 
 	plaintext := []byte("sign me with DSA")
 	h := hashFunction.New()
-	h.Write(plaintext)
+	_, err := h.Write(plaintext)
+	require.NoError(t, err)
+
 	plaintextHash := h.Sum([]byte{}) // weird API
 	// crypto.dsa.Sign doesn't truncate the hash!
 	qbytes := (dsaSizes[psize].Q.BitLen() + 7) / 8

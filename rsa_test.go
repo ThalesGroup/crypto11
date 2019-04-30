@@ -128,26 +128,21 @@ func testRsaSigning(t *testing.T, key crypto.Signer, nbits int, native bool) {
 }
 
 func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
-	var err error
-	var sig []byte
-
 	plaintext := []byte("sign me with PKCS#1 v1.5")
 	h := hashFunction.New()
-	h.Write(plaintext)
+	_, err := h.Write(plaintext)
+	require.NoError(t, err)
 	plaintextHash := h.Sum([]byte{}) // weird API
-	if sig, err = key.Sign(rand.Reader, plaintextHash, hashFunction); err != nil {
-		t.Errorf("PKCS#1 v1.5 Sign (hash %v): %v", hashFunction, err)
-		return
-	}
+
+	sig, err := key.Sign(rand.Reader, plaintextHash, hashFunction)
+	require.NoError(t, err)
+
 	rsaPubkey := key.Public().(crypto.PublicKey).(*rsa.PublicKey)
-	if err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig); err != nil {
-		t.Errorf("PKCS#1 v1.5 Verify (hash %v): %v", hashFunction, err)
-	}
+	err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	require.NoError(t, err)
 }
 
 func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
-	var err error
-	var sig []byte
 
 	if !native {
 		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
@@ -155,20 +150,21 @@ func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash
 
 	plaintext := []byte("sign me with PSS")
 	h := hashFunction.New()
-	h.Write(plaintext)
+	_, err := h.Write(plaintext)
+	require.NoError(t, err)
+
 	plaintextHash := h.Sum([]byte{}) // weird API
 	pssOptions := &rsa.PSSOptions{
 		SaltLength: rsa.PSSSaltLengthEqualsHash,
 		Hash:       hashFunction,
 	}
-	if sig, err = key.Sign(rand.Reader, plaintextHash, pssOptions); err != nil {
-		t.Errorf("PSS Sign (hash %v): %v", hashFunction, err)
-		return
-	}
+	sig, err := key.Sign(rand.Reader, plaintextHash, pssOptions)
+	require.NoError(t, err)
+
 	rsaPubkey := key.Public().(crypto.PublicKey).(*rsa.PublicKey)
-	if err = rsa.VerifyPSS(rsaPubkey, hashFunction, plaintextHash, sig, pssOptions); err != nil {
-		t.Errorf("PSS Verify (hash %v): %v", hashFunction, err)
-	}
+
+	err = rsa.VerifyPSS(rsaPubkey, hashFunction, plaintextHash, sig, pssOptions)
+	require.NoError(t, err)
 }
 
 func testRsaEncryption(t *testing.T, key crypto.Decrypter, nbits int, native bool) {

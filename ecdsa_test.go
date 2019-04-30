@@ -95,7 +95,8 @@ func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash)
 
 	plaintext := []byte("sign me with ECDSA")
 	h := hashFunction.New()
-	h.Write(plaintext)
+	_, err := h.Write(plaintext)
+	require.NoError(t, err)
 	plaintextHash := h.Sum([]byte{}) // weird API
 
 	sigDER, err := key.Sign(rand.Reader, plaintextHash, nil)
