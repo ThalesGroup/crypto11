@@ -29,16 +29,15 @@ import (
 
 // Find a key object.  For asymmetric keys this only finds one half so
 // callers will call it twice.
-func findKey(session *pkcs11Session, id []byte, label []byte, keyclass uint, keytype uint) (obj pkcs11.ObjectHandle, err error) {
+func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (obj pkcs11.ObjectHandle, err error) {
 	var handles []pkcs11.ObjectHandle
 	var template []*pkcs11.Attribute
 
-	// TODO replace this use of ^uint(0)
-	if keyclass != ^uint(0) {
-		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, keyclass))
+	if keyclass != nil {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, *keyclass))
 	}
-	if keytype != ^uint(0) {
-		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, keytype))
+	if keytype != nil {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, *keytype))
 	}
 	if id != nil {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
@@ -80,7 +79,7 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 		var privHandle, pubHandle pkcs11.ObjectHandle
 		var pub crypto.PublicKey
 
-		if privHandle, err = findKey(session, id, label, pkcs11.CKO_PRIVATE_KEY, ^uint(0)); err != nil {
+		if privHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PRIVATE_KEY), nil); err != nil {
 			return err
 		}
 		attributes := []*pkcs11.Attribute{
@@ -90,7 +89,7 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 			return err
 		}
 		keyType := bytesToUlong(attributes[0].Value)
-		if pubHandle, err = findKey(session, id, label, pkcs11.CKO_PUBLIC_KEY, keyType); err != nil {
+		if pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType); err != nil {
 			return err
 		}
 		switch keyType {
@@ -164,7 +163,7 @@ func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
 
 	err = c.withSession(func(session *pkcs11Session) error {
 		var privHandle pkcs11.ObjectHandle
-		if privHandle, err = findKey(session, id, label, pkcs11.CKO_SECRET_KEY, ^uint(0)); err != nil {
+		if privHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_SECRET_KEY), nil); err != nil {
 			return err
 		}
 		attributes := []*pkcs11.Attribute{
@@ -182,3 +181,5 @@ func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
 	})
 	return
 }
+
+func uintPtr(i uint) *uint { return &i }

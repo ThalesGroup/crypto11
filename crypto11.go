@@ -127,8 +127,6 @@ var ErrAmbiguousToken = errors.New("crypto11: config must only specify one way t
 
 // pkcs11Object contains a reference to a loaded PKCS#11 object.
 type pkcs11Object struct {
-	// TODO - handle resource cleanup. Consider adding explicit Close method and/or use a finalizer
-
 	// The PKCS#11 object handle.
 	handle pkcs11.ObjectHandle
 
@@ -306,13 +304,9 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	// Create the session pool.
-	// TODO - remove these when https://github.com/miekg/pkcs11/pull/115/ is merged
-	const ckEffectivelyInfinite = 0
-	const ckUnavailableInformation = ^uint(0)
-
 	maxSessions := instance.cfg.MaxSessions
 	tokenMaxSessions := instance.token.MaxRwSessionCount
-	if tokenMaxSessions != ckEffectivelyInfinite && tokenMaxSessions != ckUnavailableInformation {
+	if tokenMaxSessions != pkcs11.CK_EFFECTIVELY_INFINITE && tokenMaxSessions != pkcs11.CK_UNAVAILABLE_INFORMATION {
 		maxSessions = min(maxSessions, castDown(tokenMaxSessions))
 	}
 

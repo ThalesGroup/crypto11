@@ -36,19 +36,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestInitializeFromConfig(t *testing.T) {
-	// TODO - this test is odd looking and needs reworking
-	var config Config
-	config.Path = "NoSuchFile"
-	config.Pin = "NoSuchPin"
-	config.TokenSerial = "NoSuchToken"
-	config.TokenLabel = "NoSuchToken"
-	//assert.Panics(Configure(config), "Invalid config should panic")
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(t, err)
-	require.NoError(t, ctx.Close())
-}
-
 func TestLoginContext(t *testing.T) {
 	t.Run("key identity with login", func(t *testing.T) {
 		ctx, err := configureWithPin(t)
