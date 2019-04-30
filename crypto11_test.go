@@ -36,65 +36,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLoginContext(t *testing.T) {
-	t.Run("key identity with login", func(t *testing.T) {
-		ctx, err := configureWithPin(t)
-		require.NoError(t, err)
+func TestKeysPersistAcrossContexts(t *testing.T) {
+	ctx, err := configureWithPin(t)
+	require.NoError(t, err)
 
-		defer func() {
-			err = ctx.Close()
-			require.NoError(t, err)
-		}()
-
-		// Generate a key and and close a session
-		const pSize = dsa.L1024N160
-		id := randomBytes()
-		key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
-		require.NoError(t, err)
-		require.NotNil(t, key)
-
+	defer func() {
 		err = ctx.Close()
 		require.NoError(t, err)
+	}()
 
-		// Reopen a session and try to find a key.
-		// Valid session must enlist a key.
-		// If login is not performed than it will fail.
-		ctx, err = configureWithPin(t)
-		require.NoError(t, err)
+	// Generate a key and and close a session
+	const pSize = dsa.L1024N160
+	id := randomBytes()
+	key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
+	require.NoError(t, err)
+	require.NotNil(t, key)
 
-		key2, err := ctx.FindKeyPair(id, nil)
-		require.NoError(t, err)
+	err = ctx.Close()
+	require.NoError(t, err)
 
-		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
-	})
+	// Reopen a session and try to find a key.
+	// Valid session must enlist a key.
+	// If login is not performed than it will fail.
+	ctx, err = configureWithPin(t)
+	require.NoError(t, err)
 
-	t.Run("login context shared between sessions", func(t *testing.T) {
-		ctx, err := configureWithPin(t)
-		require.NoError(t, err)
+	key2, err := ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
 
-		defer func() {
-			err = ctx.Close()
-			require.NoError(t, err)
-		}()
+	testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
 
-		// Generate a key and and close a session
-		const pSize = dsa.L1024N160
-		id := randomBytes()
-		key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
-		require.NoError(t, err)
-		require.NotNil(t, key)
-
-		// TODO - need to examine this test in more detail to see what it accomplishes
-		err = ctx.withSession(func(s1 *pkcs11Session) error {
-			return ctx.withSession(func(s2 *pkcs11Session) error {
-				key2, err := ctx.FindKeyPair(id, nil)
-				require.NoError(t, err)
-				testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
-				return nil
-			})
-		})
-		require.NoError(t, err)
-	})
+	err = key2.Delete()
+	require.NoError(t, err)
 }
 
 func configureWithPin(t *testing.T) (*Context, error) {
