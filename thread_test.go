@@ -55,7 +55,7 @@ func TestThreadedRSA(t *testing.T) {
 	}
 	t.Logf("Waiting for %v threads", threadCount)
 	for i := 0; i < threadCount; i++ {
-		_ = <-done
+		<-done
 	}
 	finished := time.Now()
 	ticks := finished.Sub(started)

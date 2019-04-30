@@ -209,7 +209,7 @@ func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 		t.Errorf("PKCS#1v1.5 Decrypt (nil options): %v", err)
 		return
 	}
-	if bytes.Compare(plaintext, decrypted) != 0 {
+	if !bytes.Equal(plaintext, decrypted) {
 		t.Errorf("PKCS#1v1.5 Decrypt (nil options): wrong answer")
 		return
 	}
@@ -220,7 +220,7 @@ func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 		t.Errorf("PKCS#1v1.5 Decrypt %v", err)
 		return
 	}
-	if bytes.Compare(plaintext, decrypted) != 0 {
+	if !bytes.Equal(plaintext, decrypted) {
 		t.Errorf("PKCS#1v1.5 Decrypt: wrong answer")
 		return
 	}

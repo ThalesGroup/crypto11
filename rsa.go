@@ -216,7 +216,7 @@ func decryptOAEP(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []
 	if hMech, mgf, _, err = hashToPKCS11(hashFunction); err != nil {
 		return nil, err
 	}
-	if label != nil && len(label) > 0 {
+	if len(label) > 0 {
 		sourceData = uint(uintptr(unsafe.Pointer(&label[0])))
 		sourceDataLen = uint(len(label))
 	}

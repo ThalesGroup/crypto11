@@ -137,7 +137,7 @@ func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher
 		output[i] = byte(i + 6*b)
 	}
 	encryptKey.Encrypt(middle, input) // middle[:b] = encrypt(input[:b])
-	if bytes.Compare(input[:b], middle[:b]) == 0 {
+	if bytes.Equal(input[:b], middle[:b]) {
 		t.Errorf("crypto11.PKCSSecretKey.Encrypt: identity transformation")
 		return
 	}
@@ -162,7 +162,7 @@ func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher
 		}
 	}
 	decryptKey.Decrypt(output, middle) // output[:b] = decrypt(middle[:b])
-	if bytes.Compare(input[:b], output[:b]) != 0 {
+	if !bytes.Equal(input[:b], output[:b]) {
 		t.Errorf("crypto11.PKCSSecretKey.Decrypt: plaintext wrong")
 		return
 	}
@@ -186,7 +186,7 @@ func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.Bl
 	}
 	// Encrypt the first 128 bytes
 	encrypt.CryptBlocks(middle, input[:128])
-	if bytes.Compare(input[:128], middle[:128]) == 0 {
+	if bytes.Equal(input[:128], middle[:128]) {
 		t.Errorf("BlockMode.Encrypt: did not modify destination")
 		return
 	}
@@ -206,7 +206,7 @@ func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.Bl
 	encrypt.CryptBlocks(middle[128:], input[128:])
 	// Decrypt in a single go
 	decrypt.CryptBlocks(output, middle)
-	if bytes.Compare(input, output) != 0 {
+	if !bytes.Equal(input, output) {
 		t.Errorf("BlockMode.Decrypt: plaintext wrong")
 		return
 	}
@@ -228,7 +228,7 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 		t.Errorf("aead.Open: %s", err)
 		return
 	}
-	if bytes.Compare(plaintext, decrypted) != 0 {
+	if !bytes.Equal(plaintext, decrypted) {
 		t.Errorf("aead.Open: mismatch")
 		return
 	}
