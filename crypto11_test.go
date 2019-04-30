@@ -210,5 +210,5 @@ func TestSelectByNonExistingSlot(t *testing.T) {
 
 	// Look up slot number for label
 	_, err = Configure(config)
-	require.Error(t, ErrTokenNotFound)
+	require.Equal(t, ErrTokenNotFound, err)
 }

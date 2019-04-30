@@ -212,8 +212,8 @@ func (c *Context) findToken(slots []uint, serial, label string, slotNumber *int)
 		}
 
 		if (slotNumber != nil && uint(*slotNumber) == slot) ||
-			tokenInfo.SerialNumber == serial ||
-			tokenInfo.Label == label {
+			(tokenInfo.SerialNumber != "" && tokenInfo.SerialNumber == serial) ||
+			(tokenInfo.Label != "" && tokenInfo.Label == label) {
 
 			return slot, &tokenInfo, nil
 		}
