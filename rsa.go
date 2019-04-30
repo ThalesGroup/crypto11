@@ -82,7 +82,8 @@ func exportRSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 }
 
 // GenerateRSAKeyPair creates an RSA key pair on the token. The id parameter is used to
-// set CKA_ID and must be non-nil.
+// set CKA_ID and must be non-nil. RSA private keys are generated with both sign and decrypt
+// permissions, and a public exponent of 65537.
 func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -92,11 +93,14 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 		return nil, err
 	}
 
-	return c.generateRSAKeyPair(id, nil, bits)
+	template := []*Attribute{NewAttribute(CkaId, id)}
+	key, _, _, err := c.GenerateRSAKeyPairWithAttributes(template, template, bits)
+	return key, err
 }
 
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
-// set CKA_ID and CKA_LABEL respectively and must be non-nil.
+// set CKA_ID and CKA_LABEL respectively and must be non-nil. RSA private keys are generated with both sign and decrypt
+// permissions, and a public exponent of 65537.
 func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (SignerDecrypter, error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -109,14 +113,16 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 		return nil, err
 	}
 
-	return c.generateRSAKeyPair(id, label, bits)
+	template := []*Attribute{NewAttribute(CkaId, id), NewAttribute(CkaLabel, label)}
+	key, _, _, err := c.GenerateRSAKeyPairWithAttributes(template, template, bits)
+	return key, err
 }
 
-// GenerateRSAKeyPair creates an RSA private key of given length. The CKA_ID and CKA_LABEL attributes can be set by passing
-// non-nil values for id and label.
-//
-// RSA private keys are generated with both sign and decrypt permissions, and a public exponent of 65537.
-func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecrypter, err error) {
+// GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Additional attributes from public and
+// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
+// supplied attributes will win. The final templates applied to the keys are returned, along with the generated key.
+func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute, bits int) (key SignerDecrypter,
+	publicTemplate []*Attribute, privateTemplate []*Attribute, err error) {
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		publicKeyTemplate := []*pkcs11.Attribute{
@@ -136,15 +142,8 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecryp
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
 		}
 
-		if id != nil {
-			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-		}
-
-		if label != nil {
-			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-		}
+		publicKeyTemplate = mergeAttributes(publicKeyTemplate, public)
+		privateKeyTemplate = mergeAttributes(privateKeyTemplate, private)
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
@@ -159,7 +158,7 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecryp
 		if err != nil {
 			return err
 		}
-		k = &pkcs11PrivateKeyRSA{
+		key = &pkcs11PrivateKeyRSA{
 			pkcs11PrivateKey: pkcs11PrivateKey{
 				pkcs11Object: pkcs11Object{
 					handle:  privHandle,
@@ -168,6 +167,8 @@ func (c *Context) generateRSAKeyPair(id, label []byte, bits int) (k SignerDecryp
 				pubKeyHandle: pubHandle,
 				pubKey:       pub,
 			}}
+		public = wrapAttributes(publicKeyTemplate)
+		private = wrapAttributes(privateKeyTemplate)
 		return nil
 	})
 	return
