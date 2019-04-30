@@ -123,6 +123,8 @@ var ErrUnsupportedKeyType = errors.New("crypto11: unrecognized key type")
 // ErrClosed is returned if a Context is used after a call to Close.
 var ErrClosed = errors.New("crypto11: cannot used closed Context")
 
+var ErrAmbiguousToken = errors.New("crypto11: config must only specify one way to select a token")
+
 // pkcs11Object contains a reference to a loaded PKCS#11 object.
 type pkcs11Object struct {
 	// TODO - handle resource cleanup. Consider adding explicit Close method and/or use a finalizer
@@ -203,27 +205,30 @@ type SignerDecrypter interface {
 	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
 }
 
-// findToken finds a token given its serial number
-func (c *Context) findToken(slots []uint, serial string, label string) (uint, *pkcs11.TokenInfo, error) {
+// findToken finds a token given exactly one of serial, label or slotNumber
+func (c *Context) findToken(slots []uint, serial, label string, slotNumber *int) (uint, *pkcs11.TokenInfo, error) {
 	for _, slot := range slots {
+
 		tokenInfo, err := c.ctx.GetTokenInfo(slot)
 		if err != nil {
 			return 0, nil, err
 		}
-		if tokenInfo.SerialNumber == serial {
+
+		if (slotNumber != nil && uint(*slotNumber) == slot) ||
+			tokenInfo.SerialNumber == serial ||
+			tokenInfo.Label == label {
+
 			return slot, &tokenInfo, nil
 		}
-		if tokenInfo.Label == label {
-			return slot, &tokenInfo, nil
-		}
+
 	}
 	return 0, nil, ErrTokenNotFound
 }
 
 // Config holds PKCS#11 configuration information.
 //
-// A token may be identified either by serial number or label.  If
-// both are specified then the first match wins.
+// A token may be selected by label, serial number or slot number. It is an error to specify
+// more than one way to select the token.
 //
 // Supply this to Configure(), or alternatively use ConfigureFromFile().
 type Config struct {
@@ -235,6 +240,9 @@ type Config struct {
 
 	// Token label.
 	TokenLabel string
+
+	// SlotNumber identifies a token to use by the slot containing it.
+	SlotNumber *int
 
 	// User PIN (password).
 	Pin string
@@ -248,6 +256,21 @@ type Config struct {
 
 // Configure creates a new Context based on the supplied PKCS#11 configuration.
 func Configure(config *Config) (*Context, error) {
+	// Have we been given exactly one way to select a token?
+	count := 0
+	if config.SlotNumber != nil {
+		count++
+	}
+	if config.TokenLabel != "" {
+		count++
+	}
+	if config.TokenSerial != "" {
+		count++
+	}
+	if count != 1 {
+		return nil, ErrAmbiguousToken
+	}
+
 	if config.MaxSessions == 0 {
 		config.MaxSessions = DefaultMaxSessions
 	}
@@ -263,16 +286,21 @@ func Configure(config *Config) (*Context, error) {
 	}
 	if err := instance.ctx.Initialize(); err != nil {
 		log.Printf("Failed to initialize PKCS#11 library: %s", err.Error())
+		instance.ctx.Destroy()
 		return nil, err
 	}
 	slots, err := instance.ctx.GetSlotList(true)
 	if err != nil {
+		_ = instance.ctx.Finalize()
+		instance.ctx.Destroy()
 		log.Printf("Failed to list PKCS#11 Slots: %s", err.Error())
 		return nil, err
 	}
 
-	instance.slot, instance.token, err = instance.findToken(slots, config.TokenSerial, config.TokenLabel)
+	instance.slot, instance.token, err = instance.findToken(slots, config.TokenSerial, config.TokenLabel, config.SlotNumber)
 	if err != nil {
+		_ = instance.ctx.Finalize()
+		instance.ctx.Destroy()
 		log.Printf("Failed to find Token in any Slot: %s", err.Error())
 		return nil, err
 	}
@@ -295,10 +323,14 @@ func Configure(config *Config) (*Context, error) {
 	// a connection alive to the token to ensure object handles and the log in status remain accessible.
 	instance.persistentSession, err = instance.ctx.OpenSession(instance.slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
+		_ = instance.ctx.Finalize()
+		instance.ctx.Destroy()
 		return nil, errors.WithMessagef(err, "crypto11: failed to create long term session")
 	}
 	err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
 	if err != nil {
+		_ = instance.ctx.Finalize()
+		instance.ctx.Destroy()
 		return nil, errors.WithMessagef(err, "crypto11: failed to log into long term session")
 	}
 

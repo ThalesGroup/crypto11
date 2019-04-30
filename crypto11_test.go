@@ -26,8 +26,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
@@ -188,4 +192,63 @@ func TestKeyDelete(t *testing.T) {
 
 	_, err = ctx.FindKey(id, nil)
 	require.Equal(t, ErrKeyNotFound, err)
+}
+
+func TestAmbiguousTokenConfig(t *testing.T) {
+	slotNum := 1
+	badConfigs := []*Config{
+		{TokenSerial: "serial", TokenLabel: "label"},
+		{TokenSerial: "serial", SlotNumber: &slotNum},
+		{SlotNumber: &slotNum, TokenLabel: "label"},
+	}
+
+	for _, config := range badConfigs {
+		_, err := Configure(config)
+		assert.Equal(t, ErrAmbiguousToken, err)
+	}
+}
+
+func TestSelectBySlot(t *testing.T) {
+	config, err := loadConfigFromFile("config")
+	require.NoError(t, err)
+
+	// Look up slot number for label
+	ctx, err := Configure(config)
+	require.NoError(t, err)
+
+	slotNumber := int(ctx.slot)
+	t.Logf("Using slot %d", slotNumber)
+	err = ctx.Close()
+	require.NoError(t, err)
+
+	slotConfig := &Config{
+		SlotNumber: &slotNumber,
+		Pin:        config.Pin,
+		Path:       config.Path,
+	}
+
+	ctx, err = Configure(slotConfig)
+	require.NoError(t, err)
+
+	slotNumber2 := int(ctx.slot)
+	err = ctx.Close()
+	require.NoError(t, err)
+
+	assert.Equal(t, slotNumber, slotNumber2)
+}
+
+func TestSelectByNonExistingSlot(t *testing.T) {
+	config, err := loadConfigFromFile("config")
+	require.NoError(t, err)
+
+	rand.Seed(time.Now().UnixNano())
+	randomSlot := int(rand.Uint32())
+
+	config.TokenLabel = ""
+	config.TokenSerial = ""
+	config.SlotNumber = &randomSlot
+
+	// Look up slot number for label
+	_, err = Configure(config)
+	require.Error(t, ErrTokenNotFound)
 }
