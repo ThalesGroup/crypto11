@@ -331,7 +331,7 @@ func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *Symmetri
 		}
 
 		// We can only get here if there were no GenParams
-		return errors.New("crypto11: cipher must have GenParams")
+		return errors.New("cipher must have GenParams")
 	})
 	return
 }

@@ -129,7 +129,7 @@ type pkcs11Object struct {
 func (o *pkcs11Object) Delete() error {
 	return o.context.withSession(func(session *pkcs11Session) error {
 		err := session.ctx.DestroyObject(session.handle, o.handle)
-		return errors.WithMessage(err, "crypto11: failed to destroy key")
+		return errors.WithMessage(err, "failed to destroy key")
 	})
 }
 
@@ -154,7 +154,7 @@ func (k *pkcs11PrivateKey) Delete() error {
 
 	return k.context.withSession(func(session *pkcs11Session) error {
 		err := session.ctx.DestroyObject(session.handle, k.pubKeyHandle)
-		return errors.WithMessage(err, "crypto11: failed to destroy public key")
+		return errors.WithMessage(err, "failed to destroy public key")
 	})
 }
 
@@ -306,13 +306,13 @@ func Configure(config *Config) (*Context, error) {
 	if err != nil {
 		_ = instance.ctx.Finalize()
 		instance.ctx.Destroy()
-		return nil, errors.WithMessagef(err, "crypto11: failed to create long term session")
+		return nil, errors.WithMessagef(err, "failed to create long term session")
 	}
 	err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
 	if err != nil {
 		_ = instance.ctx.Finalize()
 		instance.ctx.Destroy()
-		return nil, errors.WithMessagef(err, "crypto11: failed to log into long term session")
+		return nil, errors.WithMessagef(err, "failed to log into long term session")
 	}
 
 	return instance, nil

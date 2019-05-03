@@ -67,7 +67,7 @@ func exportDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle) (
 
 func notNilBytes(obj []byte, name string) error {
 	if obj == nil {
-		return errors.Errorf("crypto11: %s cannot be nil", name)
+		return errors.Errorf("%s cannot be nil", name)
 	}
 	return nil
 }
