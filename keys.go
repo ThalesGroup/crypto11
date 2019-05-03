@@ -174,12 +174,15 @@ func (k pkcs11PrivateKey) Public() crypto.PublicKey {
 // FindKey retrieves a previously created symmetric key, or nil if it cannot be found.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
-func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
+func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
+
 	if c.closed.Get() {
 		return nil, errClosed
 	}
 
-	err = c.withSession(func(session *pkcs11Session) error {
+	var k *SecretKey
+
+	err := c.withSession(func(session *pkcs11Session) error {
 		privHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_SECRET_KEY), nil)
 		if err != nil {
 			return err
@@ -204,7 +207,8 @@ func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
 		}
 		return nil
 	})
-	return
+
+	return k, err
 }
 
 func uintPtr(i uint) *uint { return &i }
