@@ -110,9 +110,6 @@ const (
 // errTokenNotFound represents the failure to find the requested PKCS#11 token
 var errTokenNotFound = errors.New("could not find PKCS#11 token")
 
-// errCannotOpenPKCS11 is returned when the PKCS#11 library cannot be opened
-var errCannotOpenPKCS11 = errors.New("could not open PKCS#11")
-
 // errClosed is returned if a Context is used after a call to Close.
 var errClosed = errors.New("cannot used closed Context")
 
@@ -273,7 +270,7 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	if instance.ctx == nil {
-		return nil, errCannotOpenPKCS11
+		return nil, errors.New("could not open PKCS#11")
 	}
 	if err := instance.ctx.Initialize(); err != nil {
 		instance.ctx.Destroy()
