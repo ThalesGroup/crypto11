@@ -107,8 +107,8 @@ var hmacInfos = map[int]*hmacInfo{
 	pkcs11.CKM_RIPEMD160_HMAC_GENERAL:  {20, 64, true},
 }
 
-// ErrHmacClosed is called if an HMAC is updated after it has finished.
-var ErrHmacClosed = errors.New("already called Sum()")
+// errHmacClosed is called if an HMAC is updated after it has finished.
+var errHmacClosed = errors.New("already called Sum()")
 
 // NewHMAC returns a new HMAC hash using the given PKCS#11 mechanism
 // and key.
@@ -167,7 +167,7 @@ func (hi *hmacImplementation) initialize() (err error) {
 func (hi *hmacImplementation) Write(p []byte) (n int, err error) {
 	if hi.result != nil {
 		if len(p) > 0 {
-			err = ErrHmacClosed
+			err = errHmacClosed
 		}
 		return
 	}

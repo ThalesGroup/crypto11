@@ -127,8 +127,9 @@ func TestKeyPairDelete(t *testing.T) {
 	err = key.Delete()
 	require.NoError(t, err)
 
-	_, err = ctx.FindKeyPair(id, nil)
-	require.Equal(t, ErrKeyNotFound, err)
+	k, err := ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
+	require.Nil(t, k)
 }
 
 func TestKeyDelete(t *testing.T) {
@@ -150,8 +151,9 @@ func TestKeyDelete(t *testing.T) {
 	err = key.Delete()
 	require.NoError(t, err)
 
-	_, err = ctx.FindKey(id, nil)
-	require.Equal(t, ErrKeyNotFound, err)
+	k, err := ctx.FindKey(id, nil)
+	require.NoError(t, err)
+	require.Nil(t, k)
 }
 
 func TestAmbiguousTokenConfig(t *testing.T) {
@@ -164,7 +166,7 @@ func TestAmbiguousTokenConfig(t *testing.T) {
 
 	for _, config := range badConfigs {
 		_, err := Configure(config)
-		assert.Equal(t, ErrAmbiguousToken, err)
+		assert.Equal(t, errAmbiguousToken, err)
 	}
 }
 
@@ -210,5 +212,5 @@ func TestSelectByNonExistingSlot(t *testing.T) {
 
 	// Look up slot number for label
 	_, err = Configure(config)
-	require.Equal(t, ErrTokenNotFound, err)
+	require.Equal(t, errTokenNotFound, err)
 }

@@ -66,7 +66,7 @@ func (c *Context) getSession() (*pkcs11Session, error) {
 	resource, err := c.pool.Get(ctx)
 	if err == pools.ErrClosed {
 		// Our Context must have been closed, return a nicer error
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 	if err != nil {
 		return nil, err

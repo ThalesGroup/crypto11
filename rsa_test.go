@@ -80,7 +80,6 @@ func TestHardRSA(t *testing.T) {
 			require.NotNil(t, key)
 
 			var key2, key3 crypto.PrivateKey
-			var label, id []byte
 
 			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, false) })
 			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, false) })

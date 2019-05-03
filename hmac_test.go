@@ -107,7 +107,7 @@ func testHmac(t *testing.T, ctx *Context, keytype int, mech int, length int, xle
 
 			// Can't add more after Sum()
 			_, err = h1.Write(input)
-			require.Equal(t, ErrHmacClosed, err)
+			require.Equal(t, errHmacClosed, err)
 
 			// 0-length is special
 			n, err = h1.Write([]byte{})

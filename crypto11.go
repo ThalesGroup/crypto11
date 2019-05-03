@@ -107,22 +107,17 @@ const (
 	DefaultMaxSessions = 1024
 )
 
-// ErrTokenNotFound represents the failure to find the requested PKCS#11 token
-var ErrTokenNotFound = errors.New("crypto11: could not find PKCS#11 token")
+// errTokenNotFound represents the failure to find the requested PKCS#11 token
+var errTokenNotFound = errors.New("could not find PKCS#11 token")
 
-// ErrKeyNotFound represents the failure to find the requested PKCS#11 key
-var ErrKeyNotFound = errors.New("crypto11: could not find PKCS#11 key")
+// errCannotOpenPKCS11 is returned when the PKCS#11 library cannot be opened
+var errCannotOpenPKCS11 = errors.New("could not open PKCS#11")
 
-// ErrCannotOpenPKCS11 is returned when the PKCS#11 library cannot be opened
-var ErrCannotOpenPKCS11 = errors.New("crypto11: could not open PKCS#11")
+// errClosed is returned if a Context is used after a call to Close.
+var errClosed = errors.New("cannot used closed Context")
 
-// ErrUnsupportedKeyType is returned when the PKCS#11 library returns a key type that isn't supported
-var ErrUnsupportedKeyType = errors.New("crypto11: unrecognized key type")
-
-// ErrClosed is returned if a Context is used after a call to Close.
-var ErrClosed = errors.New("crypto11: cannot used closed Context")
-
-var ErrAmbiguousToken = errors.New("crypto11: config must only specify one way to select a token")
+// errAmbiguousToken is returned if the supplied Config specifies more than one way to select the token.
+var errAmbiguousToken = errors.New("config must only specify one way to select a token")
 
 // pkcs11Object contains a reference to a loaded PKCS#11 object.
 type pkcs11Object struct {
@@ -219,7 +214,7 @@ func (c *Context) findToken(slots []uint, serial, label string, slotNumber *int)
 		}
 
 	}
-	return 0, nil, ErrTokenNotFound
+	return 0, nil, errTokenNotFound
 }
 
 // Config holds PKCS#11 configuration information.
@@ -265,7 +260,7 @@ func Configure(config *Config) (*Context, error) {
 		count++
 	}
 	if count != 1 {
-		return nil, ErrAmbiguousToken
+		return nil, errAmbiguousToken
 	}
 
 	if config.MaxSessions == 0 {
@@ -278,7 +273,7 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	if instance.ctx == nil {
-		return nil, ErrCannotOpenPKCS11
+		return nil, errCannotOpenPKCS11
 	}
 	if err := instance.ctx.Initialize(); err != nil {
 		instance.ctx.Destroy()

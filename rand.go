@@ -28,7 +28,7 @@ import (
 // NewRandomReader returns a reader for the random number generator on the token.
 func (c *Context) NewRandomReader() (io.Reader, error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	return pkcs11RandReader{c}, nil

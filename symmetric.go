@@ -256,7 +256,7 @@ type SecretKey struct {
 // set CKA_ID and must be non-nil.
 func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	if err := notNilBytes(id, "id"); err != nil {
@@ -270,7 +270,7 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
 func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher *SymmetricCipher) (*SecretKey, error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	if err := notNilBytes(id, "id"); err != nil {

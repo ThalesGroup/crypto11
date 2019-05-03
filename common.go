@@ -24,20 +24,12 @@ package crypto11
 import (
 	"C"
 	"encoding/asn1"
-	"errors"
 	"math/big"
 	"unsafe"
 
 	"github.com/miekg/pkcs11"
+	"github.com/pkg/errors"
 )
-
-// ErrMalformedDER represents a failure to decode an ASN.1-encoded message
-var ErrMalformedDER = errors.New("crypto11: malformed DER message")
-
-// ErrMalformedSignature represents a failure to decode a signature.  This
-// means the PKCS#11 library has returned an empty or odd-length byte
-// string.
-var ErrMalformedSignature = errors.New("crypto11xo: malformed signature")
 
 func ulongToBytes(n uint) []byte {
 	return C.GoBytes(unsafe.Pointer(&n), C.sizeof_ulong) // ugh!
@@ -68,7 +60,7 @@ type dsaSignature struct {
 // Populate a dsaSignature from a raw byte sequence
 func (sig *dsaSignature) unmarshalBytes(sigBytes []byte) error {
 	if len(sigBytes) == 0 || len(sigBytes)%2 != 0 {
-		return ErrMalformedSignature
+		return errors.New("DSA signature length is invalid from token")
 	}
 	n := len(sigBytes) / 2
 	sig.R, sig.S = new(big.Int), new(big.Int)
@@ -80,9 +72,9 @@ func (sig *dsaSignature) unmarshalBytes(sigBytes []byte) error {
 // Populate a dsaSignature from DER encoding
 func (sig *dsaSignature) unmarshalDER(sigDER []byte) error {
 	if rest, err := asn1.Unmarshal(sigDER, sig); err != nil {
-		return err
+		return errors.WithMessage(err, "DSA signature contains invalid ASN.1 data")
 	} else if len(rest) > 0 {
-		return ErrMalformedDER
+		return errors.New("unexpected data found after DSA signature")
 	}
 	return nil
 }

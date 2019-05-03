@@ -27,22 +27,18 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/asn1"
-	"errors"
 	"io"
 	"math/big"
 
-	pkcs11 "github.com/miekg/pkcs11"
+	"github.com/miekg/pkcs11"
+	"github.com/pkg/errors"
 )
 
-// ErrUnsupportedEllipticCurve is returned when an elliptic curve
+// errUnsupportedEllipticCurve is returned when an elliptic curve
 // unsupported by crypto11 is specified.  Note that the error behavior
 // for an elliptic curve unsupported by the underlying PKCS#11
 // implementation will be different.
-var ErrUnsupportedEllipticCurve = errors.New("crypto11/ecdsa: unsupported elliptic curve")
-
-// ErrMalformedPoint is returned when crypto.elliptic.Unmarshal cannot
-// decode a point.
-var ErrMalformedPoint = errors.New("crypto11/ecdsa: malformed elliptic curve point")
+var errUnsupportedEllipticCurve = errors.New("unsupported elliptic curve")
 
 // pkcs11PrivateKeyECDSA contains a reference to a loaded PKCS#11 ECDSA private key object.
 type pkcs11PrivateKeyECDSA struct {
@@ -145,7 +141,7 @@ func marshalEcParams(c elliptic.Curve) ([]byte, error) {
 		return ci.oid, nil
 	}
 	// TODO use ANSI X9.62 ECParameters representation instead
-	return nil, ErrUnsupportedEllipticCurve
+	return nil, errUnsupportedEllipticCurve
 }
 
 func unmarshalEcParams(b []byte) (elliptic.Curve, error) {
@@ -155,28 +151,28 @@ func unmarshalEcParams(b []byte) (elliptic.Curve, error) {
 			if ci.curve != nil {
 				return ci.curve, nil
 			}
-			return nil, ErrUnsupportedEllipticCurve
+			return nil, errUnsupportedEllipticCurve
 		}
 	}
 	// TODO try ANSI X9.62 ECParameters representation
-	return nil, ErrUnsupportedEllipticCurve
+	return nil, errUnsupportedEllipticCurve
 }
 
 func unmarshalEcPoint(b []byte, c elliptic.Curve) (*big.Int, *big.Int, error) {
 	var pointBytes []byte
 	extra, err := asn1.Unmarshal(b, &pointBytes)
 	if err != nil {
-		return nil, nil, ErrMalformedDER
+		return nil, nil, errors.WithMessage(err, "elliptic curve point is invalid ASN.1")
 	}
 
 	if len(extra) > 0 {
 		// We weren't expecting extra data
-		return nil, nil, ErrMalformedDER
+		return nil, nil, errors.New("unexpected data found when parsing elliptic curve point")
 	}
 
 	x, y := elliptic.Unmarshal(c, pointBytes)
 	if x == nil || y == nil {
-		return nil, nil, ErrMalformedPoint
+		return nil, nil, errors.New("failed to parse elliptic curve point")
 	}
 	return x, y, nil
 }
@@ -207,7 +203,7 @@ func exportECDSAPublicKey(session *pkcs11Session, pubHandle pkcs11.ObjectHandle)
 // underlying PKCS#11 implementation may impose further restrictions.
 func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer, error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	if err := notNilBytes(id, "id"); err != nil {
@@ -222,7 +218,7 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 // underlying PKCS#11 implementation may impose further restrictions.
 func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic.Curve) (Signer, error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	if err := notNilBytes(id, "id"); err != nil {

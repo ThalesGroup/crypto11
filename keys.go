@@ -25,13 +25,18 @@ import (
 	"crypto"
 
 	"github.com/miekg/pkcs11"
+	"github.com/pkg/errors"
 )
 
 // Find a key object.  For asymmetric keys this only finds one half so
-// callers will call it twice.
-func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (obj pkcs11.ObjectHandle, err error) {
+// callers will call it twice. Returns nil if the key does not exist on the token.
+func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (obj *pkcs11.ObjectHandle, err error) {
 	var handles []pkcs11.ObjectHandle
 	var template []*pkcs11.Attribute
+
+	if id == nil && label == nil {
+		return nil, errors.New("id and label cannot both be nil")
+	}
 
 	if keyclass != nil {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, *keyclass))
@@ -46,7 +51,7 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 	}
 	if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer func() {
 		finalErr := session.ctx.FindObjectsFinal(session.handle)
@@ -55,88 +60,101 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 		}
 	}()
 	if handles, _, err = session.ctx.FindObjects(session.handle, 1); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if len(handles) == 0 {
-		return 0, ErrKeyNotFound
+		return nil, nil
 	}
-	return handles[0], nil
+	return &handles[0], nil
 }
 
-// FindKeyPair retrieves a previously created asymmetric key.
+// FindKeyPair retrieves a previously created asymmetric key pair, or nil if it cannot be found.
 //
-// Either (but not both) of id and label may be nil, in which case they are ignored.
+// At least one of id and label must be specified. If the private key is found, but the public key is
+// not, an error is returned because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	var k Signer
 
 	err := c.withSession(func(session *pkcs11Session) error {
-		var err error
-		var privHandle, pubHandle pkcs11.ObjectHandle
+
 		var pub crypto.PublicKey
 
-		if privHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PRIVATE_KEY), nil); err != nil {
+		privHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_PRIVATE_KEY), nil)
+		if err != nil {
 			return err
 		}
+		if privHandle == nil {
+			// Cannot continue, no key found
+			return nil
+		}
+
 		attributes := []*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
 		}
-		if attributes, err = session.ctx.GetAttributeValue(session.handle, privHandle, attributes); err != nil {
+		if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
 			return err
 		}
 		keyType := bytesToUlong(attributes[0].Value)
-		if pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType); err != nil {
+
+		pubHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+		if err != nil {
 			return err
 		}
+		if pubHandle == nil {
+			// We can't return a Signer if we don't have private and public key. Treat it as an error.
+			return errors.New("could not find public key to match private key")
+		}
+
 		switch keyType {
 		case pkcs11.CKK_DSA:
-			if pub, err = exportDSAPublicKey(session, pubHandle); err != nil {
+			if pub, err = exportDSAPublicKey(session, *pubHandle); err != nil {
 				return err
 			}
 			k = &pkcs11PrivateKeyDSA{
 				pkcs11PrivateKey: pkcs11PrivateKey{
 					pkcs11Object: pkcs11Object{
-						handle:  privHandle,
+						handle:  *privHandle,
 						context: c,
 					},
-					pubKeyHandle: pubHandle,
+					pubKeyHandle: *pubHandle,
 					pubKey:       pub,
 				}}
 
 		case pkcs11.CKK_RSA:
-			if pub, err = exportRSAPublicKey(session, pubHandle); err != nil {
+			if pub, err = exportRSAPublicKey(session, *pubHandle); err != nil {
 				return err
 			}
 			k = &pkcs11PrivateKeyRSA{
 				pkcs11PrivateKey: pkcs11PrivateKey{
 					pkcs11Object: pkcs11Object{
-						handle:  privHandle,
+						handle:  *privHandle,
 						context: c,
 					},
-					pubKeyHandle: pubHandle,
+					pubKeyHandle: *pubHandle,
 					pubKey:       pub,
 				}}
 
 		case pkcs11.CKK_ECDSA:
-			if pub, err = exportECDSAPublicKey(session, pubHandle); err != nil {
+			if pub, err = exportECDSAPublicKey(session, *pubHandle); err != nil {
 				return err
 			}
 			k = &pkcs11PrivateKeyECDSA{
 				pkcs11PrivateKey: pkcs11PrivateKey{
 					pkcs11Object: pkcs11Object{
-						handle:  privHandle,
+						handle:  *privHandle,
 						context: c,
 					},
-					pubKeyHandle: pubHandle,
+					pubKeyHandle: *pubHandle,
 					pubKey:       pub,
 				}}
 
 		default:
-			return ErrUnsupportedKeyType
+			return errors.Errorf("unsupported key type: %X", keyType)
 		}
 
 		return nil
@@ -153,29 +171,36 @@ func (k pkcs11PrivateKey) Public() crypto.PublicKey {
 	return k.pubKey
 }
 
-// FindKey retrieves a previously created symmetric key.
+// FindKey retrieves a previously created symmetric key, or nil if it cannot be found.
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func (c *Context) FindKey(id []byte, label []byte) (k *SecretKey, err error) {
 	if c.closed.Get() {
-		return nil, ErrClosed
+		return nil, errClosed
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
-		var privHandle pkcs11.ObjectHandle
-		if privHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_SECRET_KEY), nil); err != nil {
+		privHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_SECRET_KEY), nil)
+		if err != nil {
 			return err
 		}
+		if privHandle == nil {
+			// Key does not exist
+			return nil
+		}
+
 		attributes := []*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
 		}
-		if attributes, err = session.ctx.GetAttributeValue(session.handle, privHandle, attributes); err != nil {
+		if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
 			return err
 		}
-		if cipher, ok := Ciphers[int(bytesToUlong(attributes[0].Value))]; ok {
-			k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
+		keyType := bytesToUlong(attributes[0].Value)
+
+		if cipher, ok := Ciphers[int(keyType)]; ok {
+			k = &SecretKey{pkcs11Object{*privHandle, c}, cipher}
 		} else {
-			return ErrUnsupportedKeyType
+			return errors.Errorf("unsupported key type: %X", keyType)
 		}
 		return nil
 	})
