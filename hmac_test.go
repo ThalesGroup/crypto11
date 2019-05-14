@@ -22,165 +22,134 @@
 package crypto11
 
 import (
-	"bytes"
+	"testing"
+
 	"github.com/miekg/pkcs11"
 	"github.com/stretchr/testify/require"
-	"hash"
-	"testing"
 )
 
 func TestHmac(t *testing.T) {
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
-	var info pkcs11.Info
-	if info, err = instance.ctx.GetInfo(); err != nil {
-		t.Errorf("GetInfo: %v", err)
-		return
-	}
+	defer func() {
+		err = ctx.Close()
+		require.NoError(t, err)
+	}()
+
+	info, err := ctx.ctx.GetInfo()
+	require.NoError(t, err)
+
 	if info.ManufacturerID == "SoftHSM" {
 		t.Skipf("HMAC not implemented on SoftHSM")
 	}
 	t.Run("HMACSHA1", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20, false)
+		testHmac(t, ctx, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20, false)
 	})
 	t.Run("HMACSHA1General", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10, true)
+		testHmac(t, ctx, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10, true)
 	})
 	t.Run("HMACSHA256", func(t *testing.T) {
-		testHmac(t, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
+		testHmac(t, ctx, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
 	})
-	require.NoError(t, Close())
+
 }
 
-func testHmac(t *testing.T, keytype int, mech int, length int, xlength int, full bool) {
-	var err error
-	var key *PKCS11SecretKey
-	t.Run("Generate", func(t *testing.T) {
-		if key, err = GenerateSecretKey(256, Ciphers[keytype]); err != nil {
-			t.Errorf("crypto11.GenerateSecretKey: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.GenerateSecretKey: returned nil but no error")
-			return
-		}
-	})
-	if key == nil {
-		return
-	}
+func testHmac(t *testing.T, ctx *Context, keytype int, mech int, length int, xlength int, full bool) {
+
+	id := randomBytes()
+	key, err := ctx.GenerateSecretKey(id, 256, Ciphers[keytype])
+	require.NoError(t, err)
+	require.NotNil(t, key)
+
 	t.Run("Short", func(t *testing.T) {
 		input := []byte("a short string")
-		var h1, h2 hash.Hash
-		if h1, err = key.NewHMAC(mech, length); err != nil {
-			t.Errorf("key.NewHMAC: %v", err)
-			return
-		}
-		if n, err := h1.Write(input); err != nil || n != len(input) {
-			t.Errorf("h1.Write: %v/%d", err, n)
-			return
-		}
+		h1, err := key.NewHMAC(mech, length)
+		require.NoError(t, err)
+
+		n, err := h1.Write(input)
+		require.NoError(t, err)
+		require.Equal(t, len(input), n)
+
 		r1 := h1.Sum([]byte{})
-		if h2, err = key.NewHMAC(mech, length); err != nil {
-			t.Errorf("key.NewHMAC: %v", err)
-			return
-		}
-		if n, err := h2.Write(input); err != nil || n != len(input) {
-			t.Errorf("h2.Write: %v/%d", err, n)
-			return
-		}
+		h2, err := key.NewHMAC(mech, length)
+		require.NoError(t, err)
+
+		n, err = h2.Write(input)
+		require.NoError(t, err)
+		require.Equal(t, len(input), n)
+
 		r2 := h2.Sum([]byte{})
-		if bytes.Compare(r1, r2) != 0 {
-			t.Errorf("h1/h2 inconsistent")
-			return
-		}
-		if len(r1) != xlength {
-			t.Errorf("r1 wrong length (want %v got %v)", xlength, len(r1))
-			return
-		}
+
+		require.Equal(t, r1, r2)
+		require.Len(t, r1, xlength)
 	})
 	if full { // Independent of hash, only do these once
 		t.Run("Empty", func(t *testing.T) {
 			// Must be able to MAC empty inputs without panicing
-			var h1 hash.Hash
-			if h1, err = key.NewHMAC(mech, length); err != nil {
-				t.Errorf("key.NewHMAC: %v", err)
-				return
-			}
+			h1, err := key.NewHMAC(mech, length)
+			require.NoError(t, err)
 			h1.Sum([]byte{})
 		})
 		t.Run("MultiSum", func(t *testing.T) {
 			input := []byte("a different short string")
-			var h1 hash.Hash
-			if h1, err = key.NewHMAC(mech, length); err != nil {
-				t.Errorf("key.NewHMAC: %v", err)
-				return
-			}
-			if n, err := h1.Write(input); err != nil || n != len(input) {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+
+			h1, err := key.NewHMAC(mech, length)
+			require.NoError(t, err)
+
+			n, err := h1.Write(input)
+			require.NoError(t, err)
+			require.Equal(t, len(input), n)
+
 			r1 := h1.Sum([]byte{})
 			r2 := h1.Sum([]byte{})
-			if bytes.Compare(r1, r2) != 0 {
-				t.Errorf("r1/r2 inconsistent")
-				return
-			}
+			require.Equal(t, r1, r2)
+
 			// Can't add more after Sum()
-			if n, err := h1.Write(input); err != ErrHmacClosed {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+			_, err = h1.Write(input)
+			require.Equal(t, errHmacClosed, err)
+
 			// 0-length is special
-			if n, err := h1.Write([]byte{}); err != nil || n != 0 {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+			n, err = h1.Write([]byte{})
+			require.NoError(t, err)
+			require.Zero(t, n)
 		})
 		t.Run("Reset", func(t *testing.T) {
-			var h1 hash.Hash
-			if h1, err = key.NewHMAC(mech, length); err != nil {
-				t.Errorf("key.NewHMAC: %v", err)
-				return
-			}
-			if n, err := h1.Write([]byte{1}); err != nil || n != 1 {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+
+			h1, err := key.NewHMAC(mech, length)
+			require.NoError(t, err)
+
+			n, err := h1.Write([]byte{1})
+			require.NoError(t, err)
+			require.Equal(t, 1, n)
+
 			r1 := h1.Sum([]byte{})
 			h1.Reset()
-			if n, err := h1.Write([]byte{2}); err != nil || n != 1 {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+
+			n, err = h1.Write([]byte{2})
+			require.NoError(t, err)
+			require.Equal(t, 1, n)
+
 			r2 := h1.Sum([]byte{})
 			h1.Reset()
-			if n, err := h1.Write([]byte{1}); err != nil || n != 1 {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+
+			n, err = h1.Write([]byte{1})
+			require.NoError(t, err)
+			require.Equal(t, 1, n)
+
 			r3 := h1.Sum([]byte{})
-			if bytes.Compare(r1, r3) != 0 {
-				t.Errorf("r1/r3 inconsistent")
-				return
-			}
-			if bytes.Compare(r1, r2) == 0 {
-				t.Errorf("r1/r2 unexpectedly equal")
-				return
-			}
+			require.Equal(t, r1, r3)
+			require.NotEqual(t, r1, r2)
 		})
 		t.Run("ResetFast", func(t *testing.T) {
 			// Reset() immediately after creation should be safe
-			var h1 hash.Hash
-			if h1, err = key.NewHMAC(mech, length); err != nil {
-				t.Errorf("key.NewHMAC: %v", err)
-				return
-			}
+
+			h1, err := key.NewHMAC(mech, length)
+			require.NoError(t, err)
 			h1.Reset()
-			if n, err := h1.Write([]byte{2}); err != nil || n != 1 {
-				t.Errorf("h1.Write: %v/%d", err, n)
-				return
-			}
+			n, err := h1.Write([]byte{2})
+			require.NoError(t, err)
+			require.Equal(t, 1, n)
 			h1.Sum([]byte{})
 		})
 	}

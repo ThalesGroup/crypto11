@@ -22,197 +22,55 @@
 package crypto11
 
 import (
-	"crypto"
 	"crypto/dsa"
 	"encoding/json"
 	"fmt"
-	"github.com/miekg/pkcs11"
-	"github.com/stretchr/testify/require"
 	"log"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestInitializeFromConfig(t *testing.T) {
-	var config PKCS11Config
-	config.Path = "NoSuchFile"
-	config.Pin = "NoSuchPin"
-	config.TokenSerial = "NoSuchToken"
-	config.TokenLabel = "NoSuchToken"
-	//assert.Panics(Configure(config), "Invalid config should panic")
-	_, err := ConfigureFromFile("config")
-	require.NoError(t, err)
-	require.NoError(t, Close())
-}
-
-func TestLoginContext(t *testing.T) {
-	t.Run("key identity with login", func(t *testing.T) {
-		_, err := configureWithPin(t)
-		require.NoError(t, err)
-
-		defer func() {
-			err = Close()
-			require.NoError(t, err)
-		}()
-
-		// Generate a key and and close a session
-		var key *PKCS11PrivateKeyDSA
-		psize := dsa.L1024N160
-		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
-			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-			return
-		}
-
-		var id []byte
-		if id, _, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
-			return
-		}
-		if err = Close(); err != nil {
-			t.Fatal(err)
-		}
-
-		// Reopen a session and try to find a key.
-		// Valid session must enlist a key.
-		// If login is not performed than it will fail.
-		_, err = configureWithPin(t)
-		require.NoError(t, err)
-
-		var key2 crypto.PrivateKey
-		if key2, err = FindKeyPair(id, nil); err != nil {
-			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
-			return
-		}
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", 0))
-	})
-
-	t.Run("key identity with expiration", func(t *testing.T) {
-		prevIdleTimeout := instance.cfg.IdleTimeout
-		defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
-		instance.cfg.IdleTimeout = time.Second
-
-		_, err := configureWithPin(t)
-		require.NoError(t, err)
-
-		defer func() {
-			err = Close()
-			require.NoError(t, err)
-		}()
-
-		// Generate a key and and close a session
-		var key *PKCS11PrivateKeyDSA
-		psize := dsa.L1024N160
-		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
-			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-			return
-		}
-
-		var id []byte
-		if id, _, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
-			return
-		}
-
-		// kick out all cfg.Idle sessions
-		time.Sleep(instance.cfg.IdleTimeout + time.Second)
-
-		var key2 crypto.PrivateKey
-		if key2, err = FindKeyPair(id, nil); err != nil {
-			t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
-			return
-		}
-		testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", 0))
-	})
-
-	t.Run("login context shared between sessions", func(t *testing.T) {
-		_, err := configureWithPin(t)
-		require.NoError(t, err)
-
-		defer func() {
-			err = Close()
-			require.NoError(t, err)
-		}()
-
-		// Generate a key and and close a session
-		var key *PKCS11PrivateKeyDSA
-		psize := dsa.L1024N160
-		if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
-			t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-			return
-		}
-
-		var id []byte
-		if id, _, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.dsa.PKCS11PrivateKeyDSA.Identify: %v", err)
-			return
-		}
-
-		if err = withSession(instance.slot, func(s1 *PKCS11Session) error {
-			return withSession(instance.slot, func(s2 *PKCS11Session) error {
-				var key2 crypto.PrivateKey
-				if key2, err = FindKeyPair(id, nil); err != nil {
-					t.Errorf("crypto11.dsa.FindDSAKeyPair by id: %v", err)
-					return nil
-				}
-				testDsaSigning(t, key2.(*PKCS11PrivateKeyDSA), psize, fmt.Sprintf("close%d", 0))
-				return nil
-			})
-		}); err != nil {
-			t.Errorf("with session failed: %s", err.Error())
-			return
-		}
-	})
-}
-
-func TestIdentityExpiration(t *testing.T) {
-	prevIdleTimeout := instance.cfg.IdleTimeout
-	defer func() {instance.cfg.IdleTimeout = prevIdleTimeout}()
-	instance.cfg.IdleTimeout = time.Second
-
-	_, err := configureWithPin(t)
+func TestKeysPersistAcrossContexts(t *testing.T) {
+	ctx, err := configureWithPin(t)
 	require.NoError(t, err)
 
 	defer func() {
-		err = Close()
+		err = ctx.Close()
 		require.NoError(t, err)
 	}()
 
 	// Generate a key and and close a session
-	var key *PKCS11PrivateKeyDSA
-	psize := dsa.L1024N160
-	if key, err = GenerateDSAKeyPair(dsaSizes[psize]); err != nil {
-		t.Errorf("crypto11.GenerateDSAKeyPair: %v", err)
-		return
-	}
-	if key == nil {
-		t.Errorf("crypto11.dsa.GenerateDSAKeyPair: returned nil but no error")
-		return
-	}
+	const pSize = dsa.L1024N160
+	id := randomBytes()
+	key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
+	require.NoError(t, err)
+	require.NotNil(t, key)
 
-	// kick out all cfg.Idle sessions
-	time.Sleep(instance.cfg.IdleTimeout + time.Second)
+	err = ctx.Close()
+	require.NoError(t, err)
 
-	if _, _, err = key.Identify(); err != nil {
-		if perr, ok := err.(pkcs11.Error); !ok || perr != pkcs11.CKR_OBJECT_HANDLE_INVALID {
-			t.Fatal("failed to generate a key, unexpected error:", err)
-		}
-	}
+	// Reopen a session and try to find a key.
+	// Valid session must enlist a key.
+	// If login is not performed than it will fail.
+	ctx, err = configureWithPin(t)
+	require.NoError(t, err)
+
+	key2, err := ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
+
+	testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", 0))
+
+	err = key2.Delete()
+	require.NoError(t, err)
 }
 
-func configureWithPin(t *testing.T) (*pkcs11.Ctx, error) {
+func configureWithPin(t *testing.T) (*Context, error) {
 	cfg, err := getConfig("config")
 	if err != nil {
 		t.Fatal(err)
@@ -230,7 +88,7 @@ func configureWithPin(t *testing.T) (*pkcs11.Ctx, error) {
 	return ctx, nil
 }
 
-func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
+func getConfig(configLocation string) (ctx *Config, err error) {
 	file, err := os.Open(configLocation)
 	if err != nil {
 		log.Printf("Could not open config file: %s", configLocation)
@@ -241,7 +99,7 @@ func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
 	}()
 
 	configDecoder := json.NewDecoder(file)
-	config := &PKCS11Config{}
+	config := &Config{}
 	err = configDecoder.Decode(config)
 	if err != nil {
 		log.Printf("Could decode config file: %s", err.Error())
@@ -250,3 +108,109 @@ func getConfig(configLocation string) (ctx *PKCS11Config, err error) {
 	return config, nil
 }
 
+func TestKeyPairDelete(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	id := randomBytes()
+	key, err := ctx.GenerateRSAKeyPair(id, 2048)
+	require.NoError(t, err)
+
+	// Check we can find it
+	_, err = ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
+
+	err = key.Delete()
+	require.NoError(t, err)
+
+	k, err := ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
+	require.Nil(t, k)
+}
+
+func TestKeyDelete(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	id := randomBytes()
+	key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
+	require.NoError(t, err)
+
+	// Check we can find it
+	_, err = ctx.FindKey(id, nil)
+	require.NoError(t, err)
+
+	err = key.Delete()
+	require.NoError(t, err)
+
+	k, err := ctx.FindKey(id, nil)
+	require.NoError(t, err)
+	require.Nil(t, k)
+}
+
+func TestAmbiguousTokenConfig(t *testing.T) {
+	slotNum := 1
+	badConfigs := []*Config{
+		{TokenSerial: "serial", TokenLabel: "label"},
+		{TokenSerial: "serial", SlotNumber: &slotNum},
+		{SlotNumber: &slotNum, TokenLabel: "label"},
+	}
+
+	for _, config := range badConfigs {
+		_, err := Configure(config)
+		assert.Equal(t, errAmbiguousToken, err)
+	}
+}
+
+func TestSelectBySlot(t *testing.T) {
+	config, err := loadConfigFromFile("config")
+	require.NoError(t, err)
+
+	// Look up slot number for label
+	ctx, err := Configure(config)
+	require.NoError(t, err)
+
+	slotNumber := int(ctx.slot)
+	t.Logf("Using slot %d", slotNumber)
+	err = ctx.Close()
+	require.NoError(t, err)
+
+	slotConfig := &Config{
+		SlotNumber: &slotNumber,
+		Pin:        config.Pin,
+		Path:       config.Path,
+	}
+
+	ctx, err = Configure(slotConfig)
+	require.NoError(t, err)
+
+	slotNumber2 := int(ctx.slot)
+	err = ctx.Close()
+	require.NoError(t, err)
+
+	assert.Equal(t, slotNumber, slotNumber2)
+}
+
+func TestSelectByNonExistingSlot(t *testing.T) {
+	config, err := loadConfigFromFile("config")
+	require.NoError(t, err)
+
+	rand.Seed(time.Now().UnixNano())
+	randomSlot := int(rand.Uint32())
+
+	config.TokenLabel = ""
+	config.TokenSerial = ""
+	config.SlotNumber = &randomSlot
+
+	// Look up slot number for label
+	_, err = Configure(config)
+	require.Equal(t, errTokenNotFound, err)
+}

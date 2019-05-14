@@ -29,8 +29,9 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var curves = []elliptic.Curve{
@@ -58,65 +59,76 @@ func TestNativeECDSA(t *testing.T) {
 }
 
 func TestHardECDSA(t *testing.T) {
-	var key *PKCS11PrivateKeyECDSA
-	var key2, key3 crypto.PrivateKey
-	var id, label []byte
-	_, err := ConfigureFromFile("config")
+	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
+	defer func() {
+		err = ctx.Close()
+		require.NoError(t, err)
+	}()
+
 	for _, curve := range curves {
-		if key, err = GenerateECDSAKeyPair(curve); err != nil {
-			t.Errorf("GenerateECDSAKeyPair: %v", err)
-			return
-		}
-		if key == nil {
-			t.Errorf("crypto11.dsa.GenerateECDSAKeyPair: returned nil but no error")
-			return
-		}
+		id := randomBytes()
+		label := randomBytes()
+
+		key, err := ctx.GenerateECDSAKeyPairWithLabel(id, label, curve)
+		require.NoError(t, err)
+		require.NotNil(t, key)
+
 		testEcdsaSigning(t, key, crypto.SHA1)
 		testEcdsaSigning(t, key, crypto.SHA224)
 		testEcdsaSigning(t, key, crypto.SHA256)
 		testEcdsaSigning(t, key, crypto.SHA384)
 		testEcdsaSigning(t, key, crypto.SHA512)
-		// Get a fresh handle to  the key
-		if id, label, err = key.Identify(); err != nil {
-			t.Errorf("crypto11.ecdsa.PKCS11PrivateKeyECDSA.Identify: %v", err)
-			return
-		}
-		if key2, err = FindKeyPair(id, nil); err != nil {
-			t.Errorf("crypto11.ecdsa.FindECDSAKeyPair by id: %v", err)
-			return
-		}
-		testEcdsaSigning(t, key2.(*PKCS11PrivateKeyECDSA), crypto.SHA256)
-		if key3, err = FindKeyPair(nil, label); err != nil {
-			t.Errorf("crypto11.ecdsa.FindKeyPair by label: %v", err)
-			return
-		}
+
+		key2, err := ctx.FindKeyPair(id, nil)
+		require.NoError(t, err)
+		testEcdsaSigning(t, key2.(*pkcs11PrivateKeyECDSA), crypto.SHA256)
+
+		key3, err := ctx.FindKeyPair(nil, label)
+		require.NoError(t, err)
 		testEcdsaSigning(t, key3.(crypto.Signer), crypto.SHA384)
 	}
-	require.NoError(t, Close())
 }
 
 func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
-	var err error
-	var sigDER []byte
-	var sig dsaSignature
 
 	plaintext := []byte("sign me with ECDSA")
 	h := hashFunction.New()
-	h.Write(plaintext)
+	_, err := h.Write(plaintext)
+	require.NoError(t, err)
 	plaintextHash := h.Sum([]byte{}) // weird API
-	if sigDER, err = key.Sign(rand.Reader, plaintextHash, nil); err != nil {
-		t.Errorf("ECDSA Sign (hash %v): %v", hashFunction, err)
-		return
-	}
-	if err = sig.unmarshalDER(sigDER); err != nil {
-		t.Errorf("ECDSA unmarshalDER (hash %v): %v", hashFunction, err)
-		return
-	}
+
+	sigDER, err := key.Sign(rand.Reader, plaintextHash, nil)
+	require.NoError(t, err)
+
+	var sig dsaSignature
+	err = sig.unmarshalDER(sigDER)
+	require.NoError(t, err)
+
 	ecdsaPubkey := key.Public().(crypto.PublicKey).(*ecdsa.PublicKey)
 	if !ecdsa.Verify(ecdsaPubkey, plaintextHash, sig.R, sig.S) {
 		t.Errorf("ECDSA Verify (hash %v): %v", hashFunction, err)
 	}
 
+}
+
+func TestEcdsaRequiredArgs(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	_, err = ctx.GenerateECDSAKeyPair(nil, elliptic.P224())
+	require.Error(t, err)
+
+	val := randomBytes()
+
+	_, err = ctx.GenerateECDSAKeyPairWithLabel(nil, val, elliptic.P224())
+	require.Error(t, err)
+
+	_, err = ctx.GenerateECDSAKeyPairWithLabel(val, nil, elliptic.P224())
+	require.Error(t, err)
 }
