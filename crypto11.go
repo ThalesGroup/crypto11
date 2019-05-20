@@ -90,8 +90,10 @@ package crypto11
 import (
 	"crypto"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vitessio/vitess/go/sync2"
@@ -112,9 +114,6 @@ var errTokenNotFound = errors.New("could not find PKCS#11 token")
 
 // errClosed is returned if a Context is used after a call to Close.
 var errClosed = errors.New("cannot used closed Context")
-
-// errAmbiguousToken is returned if the supplied Config specifies more than one way to select the token.
-var errAmbiguousToken = errors.New("config must only specify one way to select a token")
 
 // pkcs11Object contains a reference to a loaded PKCS#11 object.
 type pkcs11Object struct {
@@ -246,18 +245,20 @@ type Config struct {
 // Configure creates a new Context based on the supplied PKCS#11 configuration.
 func Configure(config *Config) (*Context, error) {
 	// Have we been given exactly one way to select a token?
-	count := 0
+	var fields []string
 	if config.SlotNumber != nil {
-		count++
+		fields = append(fields, "slot number")
 	}
 	if config.TokenLabel != "" {
-		count++
+		fields = append(fields, "token label")
 	}
 	if config.TokenSerial != "" {
-		count++
+		fields = append(fields, "token serial number")
 	}
-	if count != 1 {
-		return nil, errAmbiguousToken
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("config must specify exactly one way to select a token: none given")
+	} else if len(fields) > 1 {
+		return nil, fmt.Errorf("config must specify exactly one way to select a token: %v given", strings.Join(fields, ", "))
 	}
 
 	if config.MaxSessions == 0 {
