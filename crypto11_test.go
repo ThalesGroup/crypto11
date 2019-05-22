@@ -158,15 +158,34 @@ func TestKeyDelete(t *testing.T) {
 
 func TestAmbiguousTokenConfig(t *testing.T) {
 	slotNum := 1
-	badConfigs := []*Config{
-		{TokenSerial: "serial", TokenLabel: "label"},
-		{TokenSerial: "serial", SlotNumber: &slotNum},
-		{SlotNumber: &slotNum, TokenLabel: "label"},
+	tests := []struct {
+		config *Config
+		err    string
+	}{
+		{
+			config: &Config{TokenSerial: "serial", TokenLabel: "label"},
+			err:    "config must specify exactly one way to select a token: token label, token serial number given",
+		},
+		{
+			config: &Config{TokenSerial: "serial", SlotNumber: &slotNum},
+			err:    "config must specify exactly one way to select a token: slot number, token serial number given",
+		},
+		{
+			config: &Config{SlotNumber: &slotNum, TokenLabel: "label"},
+			err:    "config must specify exactly one way to select a token: slot number, token label given",
+		},
+		{
+			config: &Config{},
+			err:    "config must specify exactly one way to select a token: none given",
+		},
 	}
-
-	for _, config := range badConfigs {
-		_, err := Configure(config)
-		assert.Equal(t, errAmbiguousToken, err)
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("test_%d", i), func(t *testing.T) {
+			_, err := Configure(test.config)
+			if assert.Error(t, err) {
+				assert.Equal(t, test.err, err.Error())
+			}
+		})
 	}
 }
 
