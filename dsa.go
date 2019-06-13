@@ -79,11 +79,11 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithId(id)
+	if err != nil {
 		return nil, err
 	}
-
-	return c.generateDSAKeyPair(id, nil, params)
+	return c.GenerateDSAKeyPairWithAttributes(template, template, params)
 }
 
 // GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
@@ -93,18 +93,21 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithLabel(id, label)
+	if err != nil {
 		return nil, err
 	}
-	if err := notNilBytes(label, "label"); err != nil {
-		return nil, err
-	}
-
-	return c.generateDSAKeyPair(id, label, params)
+	return c.GenerateDSAKeyPairWithAttributes(template, template, params)
 }
 
-// generateDSAKeyPair creates a DSA private key on the token.
-func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
+// GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Additional attributes from public and
+// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
+// supplied attributes will win.
+func (c *Context) GenerateDSAKeyPairWithAttributes(public, private []*Attribute, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
+	if err = keyPairAttributesHaveID(public, private); err != nil {
+		return
+	}
+
 	err = c.withSession(func(session *pkcs11Session) error {
 		p := params.P.Bytes()
 		q := params.Q.Bytes()
@@ -127,15 +130,8 @@ func (c *Context) generateDSAKeyPair(id, label []byte, params *dsa.Parameters) (
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
 		}
 
-		if id != nil {
-			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-		}
-
-		if label != nil {
-			publicKeyTemplate = append(publicKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-			privateKeyTemplate = append(privateKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-		}
+		publicKeyTemplate = mergeAttributes(publicKeyTemplate, public)
+		privateKeyTemplate = mergeAttributes(privateKeyTemplate, private)
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_DSA_KEY_PAIR_GEN, nil)}
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,

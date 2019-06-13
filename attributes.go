@@ -1,6 +1,9 @@
 package crypto11
 
-import "github.com/miekg/pkcs11"
+import (
+	"fmt"
+	"github.com/miekg/pkcs11"
+)
 
 type AttributeType uint
 
@@ -154,7 +157,29 @@ func NewAttribute(attributeType AttributeType, value interface{}) *Attribute {
 	}
 }
 
-// mergeAttributes combines a template with additional attributes. Where conflicts occur, the latest definition
+// NewAttributewithId is a helper function that populates a new slice of Attributes with the provided ID.
+// This function returns an error if the ID is an empty slice.
+func NewAttributewithId(id []byte) ([]*Attribute, error) {
+	if err := notNilBytes(id, "id"); err != nil {
+		return nil, err
+	}
+	return []*Attribute{NewAttribute(CkaId, id)}, nil
+}
+
+// NewAttributewithLabel is a helper function that populates a new slice of Attributes with the provided ID and Label.
+// This function returns an error if either the ID or the Label is an empty slice.
+func NewAttributewithLabel(id, label []byte) (a []*Attribute, err error) {
+	if a, err = NewAttributewithId(id); err != nil {
+		return nil, err
+	}
+	if err := notNilBytes(label, "label"); err != nil {
+		return nil, err
+	}
+	a = append(a, NewAttribute(CkaLabel, label))
+	return
+}
+
+// mergeAttributes combines a template with additional attributes. Where conflicts occur, the user supplied definition
 // wins.
 func mergeAttributes(template []*pkcs11.Attribute, additional []*Attribute) []*pkcs11.Attribute {
 	attributes := make(map[uint]*pkcs11.Attribute)
@@ -174,6 +199,7 @@ func mergeAttributes(template []*pkcs11.Attribute, additional []*Attribute) []*p
 	return result
 }
 
+// wrapAttributes converts the internal PKCS11 attribute slice to a Crypto11 Attribute list
 func wrapAttributes(template []*pkcs11.Attribute) []*Attribute {
 	var result []*Attribute
 	for _, v := range template {
@@ -184,4 +210,32 @@ func wrapAttributes(template []*pkcs11.Attribute) []*Attribute {
 	}
 
 	return result
+}
+
+// validateAttributeHasID returns an error if the CkaId attribute is missing or empty
+func attributeHasID(attributes []*Attribute, name string) error {
+	found := false
+	for _, attr := range attributes {
+		if attr.Type == CkaId {
+			if err := notNilBytes(attr.Value, fmt.Sprintf("%s id attribute", name)); err != nil {
+				return err
+			}
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("missing %s id attribute", name)
+	}
+	return nil
+}
+
+// keyPairAttributeHasID ensures both sets of attributes has a CkaId attribute
+func keyPairAttributesHaveID(public, private []*Attribute) error {
+	if err := attributeHasID(public, "public"); err != nil {
+		return err
+	}
+	if err := attributeHasID(private, "private"); err != nil {
+		return err
+	}
+	return nil
 }

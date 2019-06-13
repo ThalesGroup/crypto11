@@ -259,11 +259,11 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithId(id)
+	if err != nil {
 		return nil, err
 	}
-
-	return c.generateSecretKey(id, nil, bits, cipher)
+	return c.GenerateSecretKeyWithAttributes(template, bits, cipher)
 }
 
 // GenerateSecretKey creates an secret key of given length and type. The id and label parameters are used to
@@ -273,19 +273,22 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithLabel(id, label)
+	if err != nil {
 		return nil, err
 	}
-	if err := notNilBytes(label, "label"); err != nil {
-		return nil, err
-	}
-
-	return c.generateSecretKey(id, label, bits, cipher)
+	return c.GenerateSecretKeyWithAttributes(template, bits, cipher)
 
 }
 
-// generateSecretKey creates an secret key of given length and type.
-func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+// GenerateSecretKeyWithAttributes creates an secret key of given length and type. Additional attributes from public and
+// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
+// supplied attributes will win.
+func (c *Context) GenerateSecretKeyWithAttributes(template []*Attribute, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+	if err = attributeHasID(template, "secret"); err != nil {
+		return
+	}
+
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
@@ -304,12 +307,7 @@ func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *Symmetri
 				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
 			}
 
-			if id != nil {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-			}
-			if label != nil {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-			}
+			secretKeyTemplate = mergeAttributes(secretKeyTemplate, template)
 
 			if bits > 0 {
 				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))

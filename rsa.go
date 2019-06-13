@@ -89,13 +89,11 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithId(id)
+	if err != nil {
 		return nil, err
 	}
-
-	template := []*Attribute{NewAttribute(CkaId, id)}
-	key, _, _, err := c.GenerateRSAKeyPairWithAttributes(template, template, bits)
-	return key, err
+	return c.GenerateRSAKeyPairWithAttributes(template, template, bits)
 }
 
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
@@ -106,23 +104,21 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributewithLabel(id, label)
+	if err != nil {
 		return nil, err
 	}
-	if err := notNilBytes(label, "label"); err != nil {
-		return nil, err
-	}
-
-	template := []*Attribute{NewAttribute(CkaId, id), NewAttribute(CkaLabel, label)}
-	key, _, _, err := c.GenerateRSAKeyPairWithAttributes(template, template, bits)
-	return key, err
+	return c.GenerateRSAKeyPairWithAttributes(template, template, bits)
 }
 
 // GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Additional attributes from public and
 // private will be merged into the default templates used when generating keys. Where conflicts occur, the user
-// supplied attributes will win. The final templates applied to the keys are returned, along with the generated key.
-func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute, bits int) (key SignerDecrypter,
-	publicTemplate []*Attribute, privateTemplate []*Attribute, err error) {
+// supplied attributes will win.
+func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute, bits int) (key SignerDecrypter, err error) {
+	if err = keyPairAttributesHaveID(public, private); err != nil {
+		return
+	}
+
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		publicKeyTemplate := []*pkcs11.Attribute{
@@ -167,8 +163,6 @@ func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute,
 				pubKeyHandle: pubHandle,
 				pubKey:       pub,
 			}}
-		public = wrapAttributes(publicKeyTemplate)
-		private = wrapAttributes(privateKeyTemplate)
 		return nil
 	})
 	return
