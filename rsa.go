@@ -93,7 +93,7 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateRSAKeyPairWithAttributes(template, template, bits)
+	return c.GenerateRSAKeyPairWithAttributes(template, template.Copy(), bits)
 }
 
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
@@ -108,20 +108,20 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateRSAKeyPairWithAttributes(template, template, bits)
+	return c.GenerateRSAKeyPairWithAttributes(template, template.Copy(), bits)
 }
 
 // GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Additional attributes from public and
 // private will be merged into the default templates used when generating keys. Where conflicts occur, the user
 // supplied attributes will win.
-func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute, bits int) (key SignerDecrypter, err error) {
-	if err = keyPairAttributesHaveID(public, private); err != nil {
+func (c *Context) GenerateRSAKeyPairWithAttributes(public, private *AttributeSet, bits int) (key SignerDecrypter, err error) {
+	if err = validateKeyPairAttributes(public, private); err != nil {
 		return
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
 
-		publicKeyTemplate := []*pkcs11.Attribute{
+		public.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -129,23 +129,20 @@ func (c *Context) GenerateRSAKeyPairWithAttributes(public, private []*Attribute,
 			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, true),
 			pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
 			pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, bits),
-		}
-		privateKeyTemplate := []*pkcs11.Attribute{
+		})
+		private.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		}
-
-		publicKeyTemplate = mergeAttributes(publicKeyTemplate, public)
-		privateKeyTemplate = mergeAttributes(privateKeyTemplate, private)
+		})
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_KEY_PAIR_GEN, nil)}
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
 			mech,
-			publicKeyTemplate,
-			privateKeyTemplate)
+			public.ToSlice(),
+			private.ToSlice())
 		if err != nil {
 			return err
 		}

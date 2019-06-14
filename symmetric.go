@@ -284,7 +284,7 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 // GenerateSecretKeyWithAttributes creates an secret key of given length and type. Additional attributes from public and
 // private will be merged into the default templates used when generating keys. Where conflicts occur, the user
 // supplied attributes will win.
-func (c *Context) GenerateSecretKeyWithAttributes(template []*Attribute, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+func (c *Context) GenerateSecretKeyWithAttributes(template *AttributeSet, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
 	if err = attributeHasID(template, "secret"); err != nil {
 		return
 	}
@@ -295,7 +295,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template []*Attribute, bits in
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
 		for _, genMech := range cipher.GenParams {
-			secretKeyTemplate := []*pkcs11.Attribute{
+			template.AddDefaultAttributes([]*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
 				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
 				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -305,16 +305,15 @@ func (c *Context) GenerateSecretKeyWithAttributes(template []*Attribute, bits in
 				pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
 				pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-			}
-
-			secretKeyTemplate = mergeAttributes(secretKeyTemplate, template)
+			})
 
 			if bits > 0 {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
+				template.Add(pkcs11.CKA_VALUE_LEN, bits/8)
 			}
+
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
 
-			privHandle, err := session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
+			privHandle, err := session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
 			if err == nil {
 				k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 				return nil

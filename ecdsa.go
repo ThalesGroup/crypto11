@@ -210,7 +210,7 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateECDSAKeyPairWithAttributes(template, template, curve)
+	return c.GenerateECDSAKeyPairWithAttributes(template, template.Copy(), curve)
 }
 
 // GenerateECDSAKeyPairWithLabel creates a ECDSA key pair on the token using curve c. The id and label parameters are used to
@@ -225,14 +225,14 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateECDSAKeyPairWithAttributes(template, template, curve)
+	return c.GenerateECDSAKeyPairWithAttributes(template, template.Copy(), curve)
 }
 
 // GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Additional attributes from public and
 // private will be merged into the default templates used when generating keys. Where conflicts occur, the user
 // supplied attributes will win.
-func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private []*Attribute, curve elliptic.Curve) (k *pkcs11PrivateKeyECDSA, err error) {
-	if err = keyPairAttributesHaveID(public, private); err != nil {
+func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private *AttributeSet, curve elliptic.Curve) (k *pkcs11PrivateKeyECDSA, err error) {
+	if err = validateKeyPairAttributes(public, private); err != nil {
 		return
 	}
 
@@ -242,28 +242,25 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private []*Attribut
 		if err != nil {
 			return err
 		}
-		publicKeyTemplate := []*pkcs11.Attribute{
+		public.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 			pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, parameters),
-		}
-		privateKeyTemplate := []*pkcs11.Attribute{
+		})
+		private.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		}
-
-		publicKeyTemplate = mergeAttributes(publicKeyTemplate, public)
-		privateKeyTemplate = mergeAttributes(privateKeyTemplate, private)
+		})
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
 			mech,
-			publicKeyTemplate,
-			privateKeyTemplate)
+			public.ToSlice(),
+			private.ToSlice())
 		if err != nil {
 			return err
 		}

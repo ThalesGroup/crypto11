@@ -83,7 +83,7 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateDSAKeyPairWithAttributes(template, template, params)
+	return c.GenerateDSAKeyPairWithAttributes(template, template.Copy(), params)
 }
 
 // GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
@@ -97,14 +97,14 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateDSAKeyPairWithAttributes(template, template, params)
+	return c.GenerateDSAKeyPairWithAttributes(template, template.Copy(), params)
 }
 
 // GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Additional attributes from public and
 // private will be merged into the default templates used when generating keys. Where conflicts occur, the user
 // supplied attributes will win.
-func (c *Context) GenerateDSAKeyPairWithAttributes(public, private []*Attribute, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
-	if err = keyPairAttributesHaveID(public, private); err != nil {
+func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
+	if err = validateKeyPairAttributes(public, private); err != nil {
 		return
 	}
 
@@ -113,7 +113,7 @@ func (c *Context) GenerateDSAKeyPairWithAttributes(public, private []*Attribute,
 		q := params.Q.Bytes()
 		g := params.G.Bytes()
 
-		publicKeyTemplate := []*pkcs11.Attribute{
+		public.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_DSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -121,23 +121,19 @@ func (c *Context) GenerateDSAKeyPairWithAttributes(public, private []*Attribute,
 			pkcs11.NewAttribute(pkcs11.CKA_PRIME, p),
 			pkcs11.NewAttribute(pkcs11.CKA_SUBPRIME, q),
 			pkcs11.NewAttribute(pkcs11.CKA_BASE, g),
-		}
-
-		privateKeyTemplate := []*pkcs11.Attribute{
+		})
+		private.AddDefaultAttributes([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-		}
-
-		publicKeyTemplate = mergeAttributes(publicKeyTemplate, public)
-		privateKeyTemplate = mergeAttributes(privateKeyTemplate, private)
+		})
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_DSA_KEY_PAIR_GEN, nil)}
 		pubHandle, privHandle, err := session.ctx.GenerateKeyPair(session.handle,
 			mech,
-			publicKeyTemplate,
-			privateKeyTemplate)
+			public.ToSlice(),
+			private.ToSlice())
 		if err != nil {
 			return err
 		}

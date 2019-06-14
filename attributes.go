@@ -5,7 +5,7 @@ import (
 	"github.com/miekg/pkcs11"
 )
 
-type AttributeType uint
+type AttributeType = uint
 
 //noinspection GoUnusedConst
 const (
@@ -141,9 +141,60 @@ const (
 )
 
 // An Attribute represents a PKCS#11 CK_ATTRIBUTE type.
-type Attribute struct {
-	Type  AttributeType
-	Value []byte
+type Attribute = pkcs11.Attribute
+
+// An AttributeSet groups together operations that are common for a slice of Attributes
+type AttributeSet struct {
+	Attributes map[AttributeType]*Attribute
+}
+
+func NewAttributeSet() *AttributeSet {
+	return &AttributeSet{
+		Attributes: map[AttributeType]*Attribute{},
+	}
+}
+
+func (a *AttributeSet) Add(attributeType AttributeType, value interface{}) *AttributeSet {
+	a.Attributes[attributeType] = NewAttribute(attributeType, value)
+	return a
+}
+
+func (a *AttributeSet) Append(attribute *Attribute) *AttributeSet {
+	a.Attributes[attribute.Type] = attribute
+	return a
+}
+
+func (a *AttributeSet) Merge(additional *AttributeSet) *AttributeSet {
+	for _, attribute := range additional.Attributes {
+		a.Attributes[attribute.Type] = attribute
+	}
+	return a
+}
+
+func (a *AttributeSet) AddDefaultAttributes(additional []*Attribute) *AttributeSet {
+	for _, additionalAttr := range additional {
+		// Only add the attribute if it is not already present in the Attribute map
+		if _, ok := a.Attributes[additionalAttr.Type]; !ok {
+			a.Attributes[additionalAttr.Type] = additionalAttr
+		}
+	}
+	return a
+}
+
+func (a *AttributeSet) ToSlice() []*Attribute {
+	var attributes []*Attribute
+	for _, v := range a.Attributes {
+		attributes = append(attributes, v)
+	}
+	return attributes
+}
+
+func (a *AttributeSet) Copy() *AttributeSet {
+	b := NewAttributeSet()
+	for _, v := range a.Attributes {
+		b.Attributes[v.Type] = v
+	}
+	return b
 }
 
 // NewAttribute is a helper function that populates a new Attribute for common data types. This function will
@@ -159,78 +210,42 @@ func NewAttribute(attributeType AttributeType, value interface{}) *Attribute {
 
 // NewAttributewithId is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
-func NewAttributewithId(id []byte) ([]*Attribute, error) {
+func NewAttributewithId(id []byte) (*AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
-	return []*Attribute{NewAttribute(CkaId, id)}, nil
+	return NewAttributeSet().Add(CkaId, id), nil
 }
 
 // NewAttributewithLabel is a helper function that populates a new slice of Attributes with the provided ID and Label.
 // This function returns an error if either the ID or the Label is an empty slice.
-func NewAttributewithLabel(id, label []byte) (a []*Attribute, err error) {
+func NewAttributewithLabel(id, label []byte) (a *AttributeSet, err error) {
 	if a, err = NewAttributewithId(id); err != nil {
 		return nil, err
 	}
+
 	if err := notNilBytes(label, "label"); err != nil {
 		return nil, err
 	}
-	a = append(a, NewAttribute(CkaLabel, label))
-	return
-}
-
-// mergeAttributes combines a template with additional attributes. Where conflicts occur, the user supplied definition
-// wins.
-func mergeAttributes(template []*pkcs11.Attribute, additional []*Attribute) []*pkcs11.Attribute {
-	attributes := make(map[uint]*pkcs11.Attribute)
-
-	for _, a := range template {
-		attributes[a.Type] = a
-	}
-
-	for _, a := range additional {
-		attributes[uint(a.Type)] = &pkcs11.Attribute{Value: a.Value, Type: uint(a.Type)}
-	}
-
-	var result []*pkcs11.Attribute
-	for _, v := range attributes {
-		result = append(result, v)
-	}
-	return result
-}
-
-// wrapAttributes converts the internal PKCS11 attribute slice to a Crypto11 Attribute list
-func wrapAttributes(template []*pkcs11.Attribute) []*Attribute {
-	var result []*Attribute
-	for _, v := range template {
-		result = append(result, &Attribute{
-			Type:  AttributeType(v.Type),
-			Value: v.Value,
-		})
-	}
-
-	return result
+	return a.Add(CkaLabel, label), nil
 }
 
 // validateAttributeHasID returns an error if the CkaId attribute is missing or empty
-func attributeHasID(attributes []*Attribute, name string) error {
-	found := false
-	for _, attr := range attributes {
-		if attr.Type == CkaId {
-			if err := notNilBytes(attr.Value, fmt.Sprintf("%s id attribute", name)); err != nil {
-				return err
-			}
-			found = true
+func attributeHasID(a *AttributeSet, name string) error {
+	if attribute, ok := a.Attributes[CkaId]; ok {
+		if err := notNilBytes(attribute.Value, fmt.Sprintf("%s id attribute", name)); err != nil {
+			return err
 		}
+		return nil
 	}
-	if !found {
-		return fmt.Errorf("missing %s id attribute", name)
-	}
-	return nil
+	return fmt.Errorf("missing %s id attribute", name)
 }
 
 // keyPairAttributeHasID ensures both sets of attributes has a CkaId attribute
-func keyPairAttributesHaveID(public, private []*Attribute) error {
+func validateKeyPairAttributes(public, private *AttributeSet) error {
+	if public == private {
+		return fmt.Errorf("public and private AttributeSet point to the same address")
+	}
 	if err := attributeHasID(public, "public"); err != nil {
 		return err
 	}
