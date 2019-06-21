@@ -94,6 +94,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vitessio/vitess/go/sync2"
@@ -242,6 +243,11 @@ type Config struct {
 	PoolWaitTimeout time.Duration
 }
 
+// refCount counts the number of contexts using a particular P11 library. It must not be read or modified
+// without holding refCountMutex.
+var refCount = map[string]int{}
+var refCountMutex = sync.Mutex{}
+
 // Configure creates a new Context based on the supplied PKCS#11 configuration.
 func Configure(config *Config) (*Context, error) {
 	// Have we been given exactly one way to select a token?
@@ -273,9 +279,18 @@ func Configure(config *Config) (*Context, error) {
 	if instance.ctx == nil {
 		return nil, errors.New("could not open PKCS#11")
 	}
-	if err := instance.ctx.Initialize(); err != nil {
-		instance.ctx.Destroy()
-		return nil, errors.WithMessage(err, "failed to initialize PKCS#11 library")
+
+	// Check how many contexts are currently using this library
+	refCountMutex.Lock()
+	defer refCountMutex.Unlock()
+	numExistingContexts := refCount[config.Path]
+
+	// Only Initialize if we are the first Context using the library
+	if numExistingContexts == 0 {
+		if err := instance.ctx.Initialize(); err != nil {
+			instance.ctx.Destroy()
+			return nil, errors.WithMessage(err, "failed to initialize PKCS#11 library")
+		}
 	}
 	slots, err := instance.ctx.GetSlotList(true)
 	if err != nil {
@@ -309,12 +324,23 @@ func Configure(config *Config) (*Context, error) {
 		instance.ctx.Destroy()
 		return nil, errors.WithMessagef(err, "failed to create long term session")
 	}
+
+	// Try to log in our persistent session. This may fail with CKR_USER_ALREADY_LOGGED_IN if another instance
+	// already exists.
 	err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
 	if err != nil {
-		_ = instance.ctx.Finalize()
-		instance.ctx.Destroy()
-		return nil, errors.WithMessagef(err, "failed to log into long term session")
+
+		pErr, isP11Error := err.(pkcs11.Error)
+
+		if !isP11Error || pErr != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
+			_ = instance.ctx.Finalize()
+			instance.ctx.Destroy()
+			return nil, errors.WithMessagef(err, "failed to log into long term session")
+		}
 	}
+
+	// Increment the reference count
+	refCount[config.Path] = numExistingContexts + 1
 
 	return instance, nil
 }
@@ -371,9 +397,14 @@ func loadConfigFromFile(configLocation string) (*Config, error) {
 	return config, errors.WithMessage(err, "could decode config file:")
 }
 
-// Close releases all the resources used by the Context and unloads the PKCS #11 library. Close blocks until existing
-// operations have finished. A closed Context cannot be reused.
+// Close releases resources used by the Context and unloads the PKCS #11 library if there are no other
+// Contexts using it. Close blocks until existing operations have finished. A closed Context cannot be reused.
 func (c *Context) Close() error {
+
+	// Take lock on the reference count
+	refCountMutex.Lock()
+	defer refCountMutex.Unlock()
+
 	c.closed.Set(true)
 
 	// Block until all resources returned to pool
@@ -383,9 +414,20 @@ func (c *Context) Close() error {
 	// since we plan to kill our collection to the library anyway.
 	_ = c.ctx.CloseSession(c.persistentSession)
 
-	err := c.ctx.Finalize()
-	if err != nil {
-		return err
+	count, found := refCount[c.cfg.Path]
+	if !found || count == 0 {
+		// We have somehow lost track of reference counts, this is very bad
+		panic("invalid reference count for PKCS#11 library")
+	}
+
+	refCount[c.cfg.Path] = count - 1
+
+	// If we were the last Context, finalize the library
+	if count == 1 {
+		err := c.ctx.Finalize()
+		if err != nil {
+			return err
+		}
 	}
 
 	c.ctx.Destroy()
