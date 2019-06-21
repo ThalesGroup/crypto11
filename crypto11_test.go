@@ -233,3 +233,36 @@ func TestSelectByNonExistingSlot(t *testing.T) {
 	_, err = Configure(config)
 	require.Equal(t, errTokenNotFound, err)
 }
+
+func TestAccessSameLibraryTwice(t *testing.T) {
+	ctx1, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	ctx2, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	// Close the first context, which shouldn't render the second
+	// context unusable
+	err = ctx1.Close()
+	require.NoError(t, err)
+
+	// Try to find a non-existant key. We are just checking that we can
+	// use the underlying P11 lib.
+	_, err = ctx2.FindKey(randomBytes(), nil)
+	require.NoError(t, err)
+
+	err = ctx2.Close()
+	require.NoError(t, err)
+
+	// Check we can open this again and use it without error
+	ctx3, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	// Try to find a non-existant key. We are just checking that we can
+	// use the underlying P11 lib.
+	_, err = ctx3.FindKey(randomBytes(), nil)
+	require.NoError(t, err)
+
+	err = ctx3.Close()
+	require.NoError(t, err)
+}
