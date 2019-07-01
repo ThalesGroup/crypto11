@@ -241,6 +241,10 @@ type Config struct {
 
 	// Maximum time to wait for a session from the sessions pool. Zero means wait indefinitely.
 	PoolWaitTimeout time.Duration
+
+	// Maximum time to allow for a session to be unused before replacing it with a new one in the pool.
+	// Zero means there is no timeout. Zero is the default.
+	PoolIdleTimeout time.Duration
 }
 
 // refCount counts the number of contexts using a particular P11 library. It must not be read or modified
@@ -314,7 +318,7 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	// We will use one session to keep state alive, so the pool gets maxSessions - 1
-	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0)
+	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, config.PoolIdleTimeout, 0)
 
 	// Create a long-term session and log it in. This session won't be used by callers, instead it is used to keep
 	// a connection alive to the token to ensure object handles and the log in status remain accessible.
