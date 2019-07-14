@@ -6,7 +6,11 @@ import (
 	"github.com/miekg/pkcs11"
 )
 
+// AttributeType represents a PKCS#11 CK_ATTRIBUTE value.
 type AttributeType = uint
+
+// Attribute represents a PKCS#11 CK_ATTRIBUTE type.
+type Attribute = pkcs11.Attribute
 
 //noinspection GoUnusedConst
 const (
@@ -141,8 +145,31 @@ const (
 	CkaAllowedMechanisms      = AttributeType(ckfArrayAttribute | AttributeType(0x00000600))
 )
 
-// An Attribute represents a PKCS#11 CK_ATTRIBUTE type.
-type Attribute = pkcs11.Attribute
+// NewAttribute is a helper function that populates a new Attribute for common data types. This function will
+// return an error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
+func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute, err error) {
+	// catch any panics from the pkcs11.NewAttribute() call to handle the error cleanly
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New(fmt.Sprintf("failed creating Attribute: %v", r))
+		}
+	}()
+
+	pAttr := pkcs11.NewAttribute(uint(attributeType), value)
+	return pAttr, nil
+}
+
+// CopyAttribute returns a deep copy of the given Attribute
+func CopyAttribute(a *Attribute) *Attribute {
+	var value []byte
+	if a.Value != nil && len(a.Value) > 0 {
+		value = append([]byte(nil), a.Value...)
+	}
+	return &pkcs11.Attribute{
+		Type:  a.Type,
+		Value: value,
+	}
+}
 
 // An AttributeSet groups together operations that are common for a slice of Attributes
 type AttributeSet struct {
@@ -191,11 +218,13 @@ func (a *AttributeSet) AddIfNotPresent(additional []*Attribute) *AttributeSet {
 	return a
 }
 
-// ToSlice returns a slice of Attributes contained in the AttributeSet
+// ToSlice returns a slice of Attributes contained in the AttributeSet. This will return a deep copy
+// of the Attributes in the AttributeSet.
 func (a *AttributeSet) ToSlice() []*Attribute {
 	var attributes []*Attribute
 	for _, v := range a.Attributes {
-		attributes = append(attributes, v)
+		duplicateAttr := CopyAttribute(v)
+		attributes = append(attributes, duplicateAttr)
 	}
 	return attributes
 }
@@ -205,32 +234,9 @@ func (a *AttributeSet) ToSlice() []*Attribute {
 func (a *AttributeSet) Copy() (*AttributeSet, error) {
 	b := NewAttributeSet()
 	for _, v := range a.Attributes {
-		value := append([]uint8(nil), v.Value...)
-		a, err := NewAttribute(v.Type, value)
-		if err != nil {
-			return &AttributeSet{}, err
-		}
-		b.Attributes[v.Type] = a
+		b.Attributes[v.Type] = CopyAttribute(v)
 	}
 	return b, nil
-}
-
-// NewAttribute is a helper function that populates a new Attribute for common data types. This function will
-// return an error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute, err error) {
-	// catch any panics from the pkcs11.NewAttribute() call to handle the error cleanly
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New(fmt.Sprintf("failed creating Attribute: %v", r))
-		}
-	}()
-
-	pAttr := pkcs11.NewAttribute(uint(attributeType), value)
-	a = &Attribute{
-		Type:  attributeType,
-		Value: pAttr.Value,
-	}
-	return a, nil
 }
 
 // NewAttributeSetWithId is a helper function that populates a new slice of Attributes with the provided ID.
