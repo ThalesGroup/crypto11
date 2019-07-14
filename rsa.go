@@ -89,11 +89,14 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithId(id)
+	public, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateRSAKeyPairWithAttributes(template, template.Copy(), bits)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateRSAKeyPairWithAttributes(public, private, bits)
 }
 
 // GenerateRSAKeyPairWithLabel creates an RSA key pair on the token. The id and label parameters are used to
@@ -104,11 +107,14 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithIDAndLabel(id, label)
+	public, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateRSAKeyPairWithAttributes(template, template.Copy(), bits)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateRSAKeyPairWithAttributes(public, private, bits)
 }
 
 // GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Required Attributes that are missing

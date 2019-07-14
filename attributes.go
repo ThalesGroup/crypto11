@@ -155,11 +155,15 @@ func NewAttributeSet() *AttributeSet {
 	}
 }
 
-func (a *AttributeSet) Add(attributeType AttributeType, value interface{}) *AttributeSet {
-// Add creates a new Attribute and adds it to the AttributeSet. This function will panic if value is
+// Add creates a new Attribute and adds it to the AttributeSet. This function will return an error if value is
 // not of type bool, int, uint, string, []byte or time.Time (or is nil).
-	a.Attributes[attributeType] = NewAttribute(attributeType, value)
-	return a
+func (a *AttributeSet) Add(attributeType AttributeType, value interface{}) (*AttributeSet, error) {
+	attr, err := NewAttribute(attributeType, value)
+	if err != nil {
+		return &AttributeSet{}, err
+	}
+	a.Attributes[attributeType] = attr
+	return a, nil
 }
 
 // Set adds the attribute to the AttributeSet overwriting the preexisting entry
@@ -196,26 +200,37 @@ func (a *AttributeSet) ToSlice() []*Attribute {
 	return attributes
 }
 
-func (a *AttributeSet) Copy() *AttributeSet {
-// Copy returns a deep copy of the AttributeSet. This function will panic if value is not of type bool, int,
-// uint, string, []byte or time.Time (or is nil).
+// Copy returns a deep copy of the AttributeSet. This function will return an error if value is not of type 
+// bool, int, uint, string, []byte or time.Time (or is nil).
+func (a *AttributeSet) Copy() (*AttributeSet, error) {
 	b := NewAttributeSet()
 	for _, v := range a.Attributes {
 		value := append([]uint8(nil), v.Value...)
-		b.Attributes[v.Type] = NewAttribute(v.Type, value)
+		a, err := NewAttribute(v.Type, value)
+		if err != nil {
+			return &AttributeSet{}, err
+		}
+		b.Attributes[v.Type] = a
 	}
-	return b
+	return b, nil
 }
 
 // NewAttribute is a helper function that populates a new Attribute for common data types. This function will
-// panic if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func NewAttribute(attributeType AttributeType, value interface{}) *Attribute {
-	// Use pkcs11 helper.
+// return an error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
+func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute, err error) {
+	// catch any panics from the pkcs11.NewAttribute() call to handle the error cleanly
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New(fmt.Sprintf("failed creating Attribute: %v", r))
+		}
+	}()
+
 	pAttr := pkcs11.NewAttribute(uint(attributeType), value)
-	return &Attribute{
+	a = &Attribute{
 		Type:  attributeType,
 		Value: pAttr.Value,
 	}
+	return a, nil
 }
 
 // NewAttributeSetWithId is a helper function that populates a new slice of Attributes with the provided ID.
@@ -224,7 +239,7 @@ func NewAttributeSetWithId(id []byte) (*AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
-	return NewAttributeSet().Add(CkaId, id), nil
+	return NewAttributeSet().Add(CkaId, id)
 }
 
 // NewAttributeSetWithIDAndLabel is a helper function that populates a new slice of Attributes with the
@@ -237,30 +252,5 @@ func NewAttributeSetWithIDAndLabel(id, label []byte) (a *AttributeSet, err error
 	if err := notNilBytes(label, "label"); err != nil {
 		return nil, err
 	}
-	return a.Add(CkaLabel, label), nil
-}
-
-// validateAttributeHasID returns an error if the CkaId attribute is missing or empty
-func attributeHasID(a *AttributeSet, name string) error {
-	if attribute, ok := a.Attributes[CkaId]; ok {
-		if err := notNilBytes(attribute.Value, fmt.Sprintf("%s id attribute", name)); err != nil {
-			return err
-		}
-		return nil
-	}
-	return fmt.Errorf("missing %s id attribute", name)
-}
-
-// keyPairAttributeHasID ensures both sets of attributes has a CkaId attribute
-func validateKeyPairAttributes(public, private *AttributeSet) error {
-	if public == private {
-		return fmt.Errorf("public and private AttributeSet point to the same address")
-	}
-	if err := attributeHasID(public, "public"); err != nil {
-		return err
-	}
-	if err := attributeHasID(private, "private"); err != nil {
-		return err
-	}
-	return nil
+	return a.Add(CkaLabel, label)
 }

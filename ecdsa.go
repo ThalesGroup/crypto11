@@ -206,11 +206,14 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithId(id)
+	public, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateECDSAKeyPairWithAttributes(template, template.Copy(), curve)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateECDSAKeyPairWithAttributes(public, private, curve)
 }
 
 // GenerateECDSAKeyPairWithLabel creates a ECDSA key pair on the token using curve c. The id and label parameters are used to
@@ -221,11 +224,14 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithIDAndLabel(id, label)
+	public, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateECDSAKeyPairWithAttributes(template, template.Copy(), curve)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateECDSAKeyPairWithAttributes(public, private, curve)
 }
 
 // GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Required Attributes that are missing

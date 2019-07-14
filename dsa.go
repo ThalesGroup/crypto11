@@ -79,11 +79,14 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithId(id)
+	public, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateDSAKeyPairWithAttributes(template, template.Copy(), params)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateDSAKeyPairWithAttributes(public, private, params)
 }
 
 // GenerateDSAKeyPairWithLabel creates a DSA key pair on the token. The id and label parameters are used to
@@ -93,11 +96,14 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithIDAndLabel(id, label)
+	public, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
-	return c.GenerateDSAKeyPairWithAttributes(template, template.Copy(), params)
+	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
+	private, _ := public.Copy()
+
+	return c.GenerateDSAKeyPairWithAttributes(public, private, params)
 }
 
 // GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Required Attributes that are missing
