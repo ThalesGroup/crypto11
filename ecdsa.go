@@ -206,7 +206,7 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithId(id)
+	template, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
@@ -221,19 +221,18 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithLabel(id, label)
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
 	return c.GenerateECDSAKeyPairWithAttributes(template, template.Copy(), curve)
 }
 
-// GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Additional attributes from public and
-// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
-// supplied attributes will win.
-func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private *AttributeSet, curve elliptic.Curve) (k *pkcs11PrivateKeyECDSA, err error) {
-	if err = validateKeyPairAttributes(public, private); err != nil {
-		return
+// GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Required Attributes that are missing
+// in the provided "public" and "private" AttributeSets will be set to a default value.
+func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private *AttributeSet, curve elliptic.Curve) (k Signer, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
@@ -242,14 +241,14 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private *AttributeS
 		if err != nil {
 			return err
 		}
-		public.AddDefaultAttributes([]*pkcs11.Attribute{
+		public.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_ECDSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, true),
 			pkcs11.NewAttribute(pkcs11.CKA_ECDSA_PARAMS, parameters),
 		})
-		private.AddDefaultAttributes([]*pkcs11.Attribute{
+		private.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),

@@ -79,7 +79,7 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithId(id)
+	template, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
@@ -93,19 +93,18 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithLabel(id, label)
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
 	return c.GenerateDSAKeyPairWithAttributes(template, template.Copy(), params)
 }
 
-// GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Additional attributes from public and
-// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
-// supplied attributes will win.
-func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet, params *dsa.Parameters) (k *pkcs11PrivateKeyDSA, err error) {
-	if err = validateKeyPairAttributes(public, private); err != nil {
-		return
+// GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Required Attributes that are missing
+// in the provided "public" and "private" AttributeSets will be set to a default value.
+func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet, params *dsa.Parameters) (k Signer, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
@@ -113,7 +112,7 @@ func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet
 		q := params.Q.Bytes()
 		g := params.G.Bytes()
 
-		public.AddDefaultAttributes([]*pkcs11.Attribute{
+		public.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_DSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -122,7 +121,7 @@ func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet
 			pkcs11.NewAttribute(pkcs11.CKA_SUBPRIME, q),
 			pkcs11.NewAttribute(pkcs11.CKA_BASE, g),
 		})
-		private.AddDefaultAttributes([]*pkcs11.Attribute{
+		private.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),

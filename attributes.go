@@ -1,6 +1,7 @@
 package crypto11
 
 import (
+	"errors"
 	"fmt"
 	"github.com/miekg/pkcs11"
 )
@@ -155,15 +156,19 @@ func NewAttributeSet() *AttributeSet {
 }
 
 func (a *AttributeSet) Add(attributeType AttributeType, value interface{}) *AttributeSet {
+// Add creates a new Attribute and adds it to the AttributeSet. This function will panic if value is
+// not of type bool, int, uint, string, []byte or time.Time (or is nil).
 	a.Attributes[attributeType] = NewAttribute(attributeType, value)
 	return a
 }
 
-func (a *AttributeSet) Append(attribute *Attribute) *AttributeSet {
+// Set adds the attribute to the AttributeSet overwriting the preexisting entry
+func (a *AttributeSet) Set(attribute *Attribute) *AttributeSet {
 	a.Attributes[attribute.Type] = attribute
 	return a
 }
 
+// Merge 
 func (a *AttributeSet) Merge(additional *AttributeSet) *AttributeSet {
 	for _, attribute := range additional.Attributes {
 		a.Attributes[attribute.Type] = attribute
@@ -171,7 +176,8 @@ func (a *AttributeSet) Merge(additional *AttributeSet) *AttributeSet {
 	return a
 }
 
-func (a *AttributeSet) AddDefaultAttributes(additional []*Attribute) *AttributeSet {
+// AddIfNotPresent adds the attribute if the Attribute Type is not already present in the AttributeSet
+func (a *AttributeSet) AddIfNotPresent(additional []*Attribute) *AttributeSet {
 	for _, additionalAttr := range additional {
 		// Only add the attribute if it is not already present in the Attribute map
 		if _, ok := a.Attributes[additionalAttr.Type]; !ok {
@@ -181,6 +187,7 @@ func (a *AttributeSet) AddDefaultAttributes(additional []*Attribute) *AttributeS
 	return a
 }
 
+// ToSlice returns a slice of Attributes contained in the AttributeSet
 func (a *AttributeSet) ToSlice() []*Attribute {
 	var attributes []*Attribute
 	for _, v := range a.Attributes {
@@ -190,9 +197,12 @@ func (a *AttributeSet) ToSlice() []*Attribute {
 }
 
 func (a *AttributeSet) Copy() *AttributeSet {
+// Copy returns a deep copy of the AttributeSet. This function will panic if value is not of type bool, int,
+// uint, string, []byte or time.Time (or is nil).
 	b := NewAttributeSet()
 	for _, v := range a.Attributes {
-		b.Attributes[v.Type] = v
+		value := append([]uint8(nil), v.Value...)
+		b.Attributes[v.Type] = NewAttribute(v.Type, value)
 	}
 	return b
 }
@@ -208,19 +218,19 @@ func NewAttribute(attributeType AttributeType, value interface{}) *Attribute {
 	}
 }
 
-// NewAttributewithId is a helper function that populates a new slice of Attributes with the provided ID.
+// NewAttributeSetWithId is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
-func NewAttributewithId(id []byte) (*AttributeSet, error) {
+func NewAttributeSetWithId(id []byte) (*AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
 	return NewAttributeSet().Add(CkaId, id), nil
 }
 
-// NewAttributewithLabel is a helper function that populates a new slice of Attributes with the provided ID and Label.
-// This function returns an error if either the ID or the Label is an empty slice.
-func NewAttributewithLabel(id, label []byte) (a *AttributeSet, err error) {
-	if a, err = NewAttributewithId(id); err != nil {
+// NewAttributeSetWithIDAndLabel is a helper function that populates a new slice of Attributes with the
+// provided ID and Label. This function returns an error if either the ID or the Label is an empty slice.
+func NewAttributeSetWithIDAndLabel(id, label []byte) (a *AttributeSet, err error) {
+	if a, err = NewAttributeSetWithId(id); err != nil {
 		return nil, err
 	}
 

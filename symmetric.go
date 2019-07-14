@@ -259,7 +259,7 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithId(id)
+	template, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithLabel(id, label)
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
@@ -281,12 +281,11 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 
 }
 
-// GenerateSecretKeyWithAttributes creates an secret key of given length and type. Additional attributes from public and
-// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
-// supplied attributes will win.
+// GenerateSecretKeyWithAttributes creates an secret key of given length and type. Required Attributes that are missing
+// in the provided "template" AttributeSet will be set to a default value.
 func (c *Context) GenerateSecretKeyWithAttributes(template *AttributeSet, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
-	if err = attributeHasID(template, "secret"); err != nil {
-		return
+	if c.closed.Get() {
+		return nil, errClosed
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
@@ -295,7 +294,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template *AttributeSet, bits i
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
 		for _, genMech := range cipher.GenParams {
-			template.AddDefaultAttributes([]*pkcs11.Attribute{
+			template.AddIfNotPresent([]*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
 				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
 				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),

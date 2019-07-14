@@ -89,7 +89,7 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithId(id)
+	template, err := NewAttributeSetWithId(id)
 	if err != nil {
 		return nil, err
 	}
@@ -104,24 +104,23 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 		return nil, errClosed
 	}
 
-	template, err := NewAttributewithLabel(id, label)
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
 	if err != nil {
 		return nil, err
 	}
 	return c.GenerateRSAKeyPairWithAttributes(template, template.Copy(), bits)
 }
 
-// GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Additional attributes from public and
-// private will be merged into the default templates used when generating keys. Where conflicts occur, the user
-// supplied attributes will win.
+// GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Required Attributes that are missing
+// in the provided "public" and "private" AttributeSets will be set to a default value.
 func (c *Context) GenerateRSAKeyPairWithAttributes(public, private *AttributeSet, bits int) (key SignerDecrypter, err error) {
-	if err = validateKeyPairAttributes(public, private); err != nil {
-		return
+	if c.closed.Get() {
+		return nil, errClosed
 	}
 
 	err = c.withSession(func(session *pkcs11Session) error {
 
-		public.AddDefaultAttributes([]*pkcs11.Attribute{
+		public.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
 			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, pkcs11.CKK_RSA),
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -130,7 +129,7 @@ func (c *Context) GenerateRSAKeyPairWithAttributes(public, private *AttributeSet
 			pkcs11.NewAttribute(pkcs11.CKA_PUBLIC_EXPONENT, []byte{1, 0, 1}),
 			pkcs11.NewAttribute(pkcs11.CKA_MODULUS_BITS, bits),
 		})
-		private.AddDefaultAttributes([]*pkcs11.Attribute{
+		private.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, true),
