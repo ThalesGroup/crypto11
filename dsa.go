@@ -83,8 +83,8 @@ func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer,
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateDSAKeyPairWithAttributes(public, private, params)
 }
@@ -100,15 +100,15 @@ func (c *Context) GenerateDSAKeyPairWithLabel(id, label []byte, params *dsa.Para
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateDSAKeyPairWithAttributes(public, private, params)
 }
 
 // GenerateDSAKeyPairWithAttributes creates a DSA key pair on the token. Required Attributes that are missing
 // in the provided "public" and "private" AttributeSets will be set to a default value.
-func (c *Context) GenerateDSAKeyPairWithAttributes(public, private *AttributeSet, params *dsa.Parameters) (k Signer, err error) {
+func (c *Context) GenerateDSAKeyPairWithAttributes(public, private AttributeSet, params *dsa.Parameters) (k Signer, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}

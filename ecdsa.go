@@ -210,8 +210,8 @@ func (c *Context) GenerateECDSAKeyPair(id []byte, curve elliptic.Curve) (Signer,
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateECDSAKeyPairWithAttributes(public, private, curve)
 }
@@ -228,15 +228,15 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateECDSAKeyPairWithAttributes(public, private, curve)
 }
 
 // GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Required Attributes that are missing
 // in the provided "public" and "private" AttributeSets will be set to a default value.
-func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private *AttributeSet, curve elliptic.Curve) (k Signer, err error) {
+func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSet, curve elliptic.Curve) (k Signer, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}

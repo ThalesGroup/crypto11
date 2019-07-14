@@ -171,48 +171,44 @@ func CopyAttribute(a *Attribute) *Attribute {
 	}
 }
 
-// An AttributeSet groups together operations that are common for a slice of Attributes
-type AttributeSet struct {
-	Attributes map[AttributeType]*Attribute
-}
+// An AttributeSet groups together operations that are common for a collection of Attributes
+type AttributeSet map[AttributeType]*Attribute
 
-func NewAttributeSet() *AttributeSet {
-	return &AttributeSet{
-		Attributes: map[AttributeType]*Attribute{},
-	}
+func NewAttributeSet() AttributeSet {
+	return make(AttributeSet)
 }
 
 // Add creates a new Attribute and adds it to the AttributeSet. This function will return an error if value is
 // not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func (a *AttributeSet) Add(attributeType AttributeType, value interface{}) (*AttributeSet, error) {
+func (a AttributeSet) Add(attributeType AttributeType, value interface{}) (AttributeSet, error) {
 	attr, err := NewAttribute(attributeType, value)
 	if err != nil {
-		return &AttributeSet{}, err
+		return nil, err
 	}
-	a.Attributes[attributeType] = attr
+	a[attributeType] = attr
 	return a, nil
 }
 
 // Set adds the attribute to the AttributeSet overwriting the preexisting entry
-func (a *AttributeSet) Set(attribute *Attribute) *AttributeSet {
-	a.Attributes[attribute.Type] = attribute
+func (a AttributeSet) Set(attribute *Attribute) AttributeSet {
+	a[attribute.Type] = attribute
 	return a
 }
 
 // Merge 
-func (a *AttributeSet) Merge(additional *AttributeSet) *AttributeSet {
-	for _, attribute := range additional.Attributes {
-		a.Attributes[attribute.Type] = attribute
+func (a AttributeSet) Merge(additional AttributeSet) AttributeSet {
+	for _, attribute := range additional {
+		a[attribute.Type] = attribute
 	}
 	return a
 }
 
 // AddIfNotPresent adds the attribute if the Attribute Type is not already present in the AttributeSet
-func (a *AttributeSet) AddIfNotPresent(additional []*Attribute) *AttributeSet {
+func (a AttributeSet) AddIfNotPresent(additional []*Attribute) AttributeSet {
 	for _, additionalAttr := range additional {
 		// Only add the attribute if it is not already present in the Attribute map
-		if _, ok := a.Attributes[additionalAttr.Type]; !ok {
-			a.Attributes[additionalAttr.Type] = additionalAttr
+		if _, ok := a[additionalAttr.Type]; !ok {
+			a[additionalAttr.Type] = additionalAttr
 		}
 	}
 	return a
@@ -220,9 +216,9 @@ func (a *AttributeSet) AddIfNotPresent(additional []*Attribute) *AttributeSet {
 
 // ToSlice returns a slice of Attributes contained in the AttributeSet. This will return a deep copy
 // of the Attributes in the AttributeSet.
-func (a *AttributeSet) ToSlice() []*Attribute {
+func (a AttributeSet) ToSlice() []*Attribute {
 	var attributes []*Attribute
-	for _, v := range a.Attributes {
+	for _, v := range a {
 		duplicateAttr := CopyAttribute(v)
 		attributes = append(attributes, duplicateAttr)
 	}
@@ -231,17 +227,17 @@ func (a *AttributeSet) ToSlice() []*Attribute {
 
 // Copy returns a deep copy of the AttributeSet. This function will return an error if value is not of type 
 // bool, int, uint, string, []byte or time.Time (or is nil).
-func (a *AttributeSet) Copy() (*AttributeSet, error) {
+func (a AttributeSet) Copy() AttributeSet {
 	b := NewAttributeSet()
-	for _, v := range a.Attributes {
-		b.Attributes[v.Type] = CopyAttribute(v)
+	for _, v := range a {
+		b[v.Type] = CopyAttribute(v)
 	}
-	return b, nil
+	return b
 }
 
 // NewAttributeSetWithId is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
-func NewAttributeSetWithId(id []byte) (*AttributeSet, error) {
+func NewAttributeSetWithId(id []byte) (AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
@@ -250,7 +246,7 @@ func NewAttributeSetWithId(id []byte) (*AttributeSet, error) {
 
 // NewAttributeSetWithIDAndLabel is a helper function that populates a new slice of Attributes with the
 // provided ID and Label. This function returns an error if either the ID or the Label is an empty slice.
-func NewAttributeSetWithIDAndLabel(id, label []byte) (a *AttributeSet, err error) {
+func NewAttributeSetWithIDAndLabel(id, label []byte) (a AttributeSet, err error) {
 	if a, err = NewAttributeSetWithId(id); err != nil {
 		return nil, err
 	}

@@ -283,7 +283,7 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 
 // GenerateSecretKeyWithAttributes creates an secret key of given length and type. Required Attributes that are missing
 // in the provided "template" AttributeSet will be set to a default value.
-func (c *Context) GenerateSecretKeyWithAttributes(template *AttributeSet, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}

@@ -93,8 +93,8 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateRSAKeyPairWithAttributes(public, private, bits)
 }
@@ -111,15 +111,15 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 	if err != nil {
 		return nil, err
 	}
-	// Copy the AttributeSet to allow modifications. Ignoring any errors as they will be caught above
-	private, _ := public.Copy()
+	// Copy the AttributeSet to allow modifications.
+	private := public.Copy()
 
 	return c.GenerateRSAKeyPairWithAttributes(public, private, bits)
 }
 
 // GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Required Attributes that are missing
 // in the provided "public" and "private" AttributeSets will be set to a default value.
-func (c *Context) GenerateRSAKeyPairWithAttributes(public, private *AttributeSet, bits int) (key SignerDecrypter, err error) {
+func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet, bits int) (key SignerDecrypter, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
