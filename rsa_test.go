@@ -132,7 +132,13 @@ func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto
 	require.NoError(t, err)
 
 	rsaPubkey := key.Public().(crypto.PublicKey).(*rsa.PublicKey)
-	err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	if !isSHA3(hashFunction) {
+		err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	} else {
+		// the standard library does not yet support SHA3 with the RSASSA-PKCS1-v1_5 algorithm so using a custom
+		// verify function that does have support for SHA3
+		err = verifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	}
 	require.NoError(t, err)
 }
 
@@ -185,6 +191,16 @@ func testRsaEncryption(t *testing.T, key crypto.Decrypter, native bool) {
 	t.Run("OAEPSHA3-512", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA3_512, []byte{}, native) })
 }
 
+// isSHA3 returns true if the hash function is part of the SHA3 family
+func isSHA3(hash crypto.Hash) bool {
+	switch hash {
+	case crypto.SHA3_224, crypto.SHA3_256, crypto.SHA3_384, crypto.SHA3_512:
+		return true
+	default:
+		return false
+	}
+}
+
 func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
 	var err error
 	var ciphertext, decrypted []byte
@@ -224,8 +240,12 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 		info, err := key.(*pkcs11PrivateKeyRSA).context.ctx.GetInfo()
 		require.NoError(t, err)
 
+		// The SHA3
 		if info.ManufacturerID == "SoftHSM" && (hashFunction != crypto.SHA1 || len(label) > 0) {
-			t.Skipf("SoftHSM OAEP only supports SHA-1 with no label")
+			// SHA3 hashes use a hybrid method which do not have this limitation
+			if !isSHA3(hashFunction) {
+				t.Skipf("SoftHSM OAEP only supports SHA-1 with no label")
+			}
 		}
 	}
 

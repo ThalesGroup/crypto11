@@ -52,3 +52,18 @@ func (r pkcs11RandReader) Read(data []byte) (n int, err error) {
 	copy(data, result)
 	return len(result), err
 }
+
+// GenerateRandomBytes returns size bytes of random data read from the PKCS#11 backend
+func (c *Context) GenerateRandomBytes(size uint) ([]byte, error) {
+	buf := make([]byte, size)
+
+	rand, err := c.NewRandomReader()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := io.ReadFull(rand, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
