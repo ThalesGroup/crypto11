@@ -101,15 +101,15 @@ func TestHardRSA(t *testing.T) {
 }
 
 func testRsaSigning(t *testing.T, key crypto.Signer, native bool) {
-	t.Run("SHA1", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA1) })
-	t.Run("SHA224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA224) })
-	t.Run("SHA256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA256) })
-	t.Run("SHA384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA384) })
-	t.Run("SHA512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA512) })
-	t.Run("SHA3-224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_224) })
-	t.Run("SHA3-256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_256) })
-	t.Run("SHA3-384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_384) })
-	t.Run("SHA3-512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_512) })
+	t.Run("SHA1", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA1, native) })
+	t.Run("SHA224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA224, native) })
+	t.Run("SHA256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA256, native) })
+	t.Run("SHA384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA384, native) })
+	t.Run("SHA512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA512, native) })
+	t.Run("SHA3-224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_224, native) })
+	t.Run("SHA3-256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_256, native) })
+	t.Run("SHA3-384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_384, native) })
+	t.Run("SHA3-512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_512, native) })
 	t.Run("PSSSHA1", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA1, native) })
 	t.Run("PSSSHA224", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA224, native) })
 	t.Run("PSSSHA256", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA256, native) })
@@ -121,7 +121,10 @@ func testRsaSigning(t *testing.T, key crypto.Signer, native bool) {
 	t.Run("PSSSHA3-512", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA3_512, native) })
 }
 
-func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
+func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
+	if native && isSHA3(hashFunction) {
+		t.Skipf("native RSA does not support SHA3")
+	}
 	plaintext := []byte("sign me with PKCS#1 v1.5")
 	h := hashFunction.New()
 	_, err := h.Write(plaintext)
@@ -143,9 +146,10 @@ func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto
 }
 
 func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
-
 	if !native {
 		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
+	} else if isSHA3(hashFunction) {
+		t.Skipf("native RSA does not support SHA3")
 	}
 
 	plaintext := []byte("sign me with PSS")
