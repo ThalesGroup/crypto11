@@ -314,7 +314,7 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	// We will use one session to keep state alive, so the pool gets maxSessions - 1
-	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0)
+	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0, 0)
 
 	// Create a long-term session and log it in. This session won't be used by callers, instead it is used to keep
 	// a connection alive to the token to ensure object handles and the log in status remain accessible.
