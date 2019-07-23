@@ -8,6 +8,7 @@ This is an implementation of the standard Golang crypto interfaces that
 uses [PKCS#11](http://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html) as a backend. The supported features are:
 
 * Generation and retrieval of RSA, DSA and ECDSA keys.
+* Importing and retrieval of x509 certificates
 * PKCS#1 v1.5 signing.
 * PKCS#1 PSS signing.
 * PKCS#1 v1.5 decryption
