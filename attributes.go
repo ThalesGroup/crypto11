@@ -3,6 +3,7 @@ package crypto11
 import (
 	"errors"
 	"fmt"
+
 	"github.com/miekg/pkcs11"
 )
 
@@ -29,7 +30,7 @@ const (
 	CkaAttrTypes              = AttributeType(0x00000085)
 	CkaTrusted                = AttributeType(0x00000086)
 	CkaCertificateCategory    = AttributeType(0x00000087)
-	CkaJavaMidpSecurityDomain = AttributeType(0x00000088)
+	CkaJavaMIDPSecurityDomain = AttributeType(0x00000088)
 	CkaUrl                    = AttributeType(0x00000089)
 	CkaHashOfSubjectPublicKey = AttributeType(0x0000008A)
 	CkaHashOfIssuerPublicKey  = AttributeType(0x0000008B)
@@ -51,8 +52,8 @@ const (
 	CkaDerive          = AttributeType(0x0000010C)
 	CkaStartDate       = AttributeType(0x00000110)
 	CkaEndDate         = AttributeType(0x00000111)
-	CkaModus           = AttributeType(0x00000120)
-	CkaModusBits       = AttributeType(0x00000121)
+	CkaModulus         = AttributeType(0x00000120)
+	CkaModulusBits     = AttributeType(0x00000121)
 	CkaPublicExponent  = AttributeType(0x00000122)
 	CkaPrivateExponent = AttributeType(0x00000123)
 	CkaPrime1          = AttributeType(0x00000124)
@@ -102,8 +103,8 @@ const (
 
 	ckfArrayAttribute = AttributeType(0x40000000)
 
-	CkaWrapTemplate   = AttributeType(ckfArrayAttribute | AttributeType(0x00000211))
-	CkaUnwrapTemplate = AttributeType(ckfArrayAttribute | AttributeType(0x00000212))
+	CkaWrapTemplate   = ckfArrayAttribute | AttributeType(0x00000211)
+	CkaUnwrapTemplate = ckfArrayAttribute | AttributeType(0x00000212)
 
 	CkaOtpFormat               = AttributeType(0x00000220)
 	CkaOtpLength               = AttributeType(0x00000221)
@@ -120,9 +121,9 @@ const (
 	CkaOtpServiceLogo          = AttributeType(0x0000022C)
 	CkaOtpServiceLogoType      = AttributeType(0x0000022D)
 
-	CkaGostr3410Params = AttributeType(0x00000250)
-	CkaGostr3411Params = AttributeType(0x00000251)
-	CkaGost28147Params = AttributeType(0x00000252)
+	CkaGOSTR3410Params = AttributeType(0x00000250)
+	CkaGOSTR3411Params = AttributeType(0x00000251)
+	CkaGOST28147Params = AttributeType(0x00000252)
 
 	CkaHwFeatureType = AttributeType(0x00000300)
 	CkaResetOnInit   = AttributeType(0x00000301)
@@ -140,9 +141,9 @@ const (
 	CkaMimeTypes              = AttributeType(0x00000482)
 	CkaMechanismType          = AttributeType(0x00000500)
 	CkaRequiredCmsAttributes  = AttributeType(0x00000501)
-	CkaDefatCmsAttributes     = AttributeType(0x00000502)
+	CkaDefaultCmsAttributes   = AttributeType(0x00000502)
 	CkaSupportedCmsAttributes = AttributeType(0x00000503)
-	CkaAllowedMechanisms      = AttributeType(ckfArrayAttribute | AttributeType(0x00000600))
+	CkaAllowedMechanisms      = ckfArrayAttribute | AttributeType(0x00000600)
 )
 
 // NewAttribute is a helper function that populates a new Attribute for common data types. This function will
@@ -155,11 +156,11 @@ func NewAttribute(attributeType AttributeType, value interface{}) (a *Attribute,
 		}
 	}()
 
-	pAttr := pkcs11.NewAttribute(uint(attributeType), value)
+	pAttr := pkcs11.NewAttribute(attributeType, value)
 	return pAttr, nil
 }
 
-// CopyAttribute returns a deep copy of the given Attribute
+// CopyAttribute returns a deep copy of the given Attribute.
 func CopyAttribute(a *Attribute) *Attribute {
 	var value []byte
 	if a.Value != nil && len(a.Value) > 0 {
@@ -171,9 +172,10 @@ func CopyAttribute(a *Attribute) *Attribute {
 	}
 }
 
-// An AttributeSet groups together operations that are common for a collection of Attributes
+// An AttributeSet groups together operations that are common for a collection of Attributes.
 type AttributeSet map[AttributeType]*Attribute
 
+// NewAttributeSet creates an empty AttributeSet.
 func NewAttributeSet() AttributeSet {
 	return make(AttributeSet)
 }
@@ -189,13 +191,14 @@ func (a AttributeSet) Add(attributeType AttributeType, value interface{}) (Attri
 	return a, nil
 }
 
-// Set adds the attribute to the AttributeSet overwriting the preexisting entry
+// Set adds the attribute to the AttributeSet overwriting the preexisting entry.
 func (a AttributeSet) Set(attribute *Attribute) AttributeSet {
 	a[attribute.Type] = attribute
 	return a
 }
 
-// Merge 
+// Merge adds all the provided attributes into this set. Existing attributes of the same time will
+// be overwritten.
 func (a AttributeSet) Merge(additional AttributeSet) AttributeSet {
 	for _, attribute := range additional {
 		a[attribute.Type] = attribute
@@ -203,7 +206,7 @@ func (a AttributeSet) Merge(additional AttributeSet) AttributeSet {
 	return a
 }
 
-// AddIfNotPresent adds the attribute if the Attribute Type is not already present in the AttributeSet
+// AddIfNotPresent adds the attributes if the Attribute Type is not already present in the AttributeSet.
 func (a AttributeSet) AddIfNotPresent(additional []*Attribute) AttributeSet {
 	for _, additionalAttr := range additional {
 		// Only add the attribute if it is not already present in the Attribute map
@@ -214,8 +217,7 @@ func (a AttributeSet) AddIfNotPresent(additional []*Attribute) AttributeSet {
 	return a
 }
 
-// ToSlice returns a slice of Attributes contained in the AttributeSet. This will return a deep copy
-// of the Attributes in the AttributeSet.
+// ToSlice returns a deep copy of Attributes contained in the AttributeSet.
 func (a AttributeSet) ToSlice() []*Attribute {
 	var attributes []*Attribute
 	for _, v := range a {
@@ -225,7 +227,7 @@ func (a AttributeSet) ToSlice() []*Attribute {
 	return attributes
 }
 
-// Copy returns a deep copy of the AttributeSet. This function will return an error if value is not of type 
+// Copy returns a deep copy of the AttributeSet. This function will return an error if value is not of type
 // bool, int, uint, string, []byte or time.Time (or is nil).
 func (a AttributeSet) Copy() AttributeSet {
 	b := NewAttributeSet()
