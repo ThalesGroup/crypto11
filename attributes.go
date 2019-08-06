@@ -182,39 +182,36 @@ func NewAttributeSet() AttributeSet {
 
 // Add creates a new Attribute and adds it to the AttributeSet. This function will return an error if value is
 // not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func (a AttributeSet) Add(attributeType AttributeType, value interface{}) (AttributeSet, error) {
+func (a AttributeSet) Add(attributeType AttributeType, value interface{}) error {
 	attr, err := NewAttribute(attributeType, value)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	a[attributeType] = attr
-	return a, nil
+	return nil
 }
 
 // Set adds the attribute to the AttributeSet overwriting the preexisting entry.
-func (a AttributeSet) Set(attribute *Attribute) AttributeSet {
+func (a AttributeSet) Set(attribute *Attribute) {
 	a[attribute.Type] = attribute
-	return a
 }
 
 // Merge adds all the provided attributes into this set. Existing attributes of the same time will
 // be overwritten.
-func (a AttributeSet) Merge(additional AttributeSet) AttributeSet {
+func (a AttributeSet) Merge(additional AttributeSet) {
 	for _, attribute := range additional {
 		a[attribute.Type] = attribute
 	}
-	return a
 }
 
 // AddIfNotPresent adds the attributes if the Attribute Type is not already present in the AttributeSet.
-func (a AttributeSet) AddIfNotPresent(additional []*Attribute) AttributeSet {
+func (a AttributeSet) AddIfNotPresent(additional []*Attribute) {
 	for _, additionalAttr := range additional {
 		// Only add the attribute if it is not already present in the Attribute map
 		if _, ok := a[additionalAttr.Type]; !ok {
 			a[additionalAttr.Type] = additionalAttr
 		}
 	}
-	return a
 }
 
 // ToSlice returns a deep copy of Attributes contained in the AttributeSet.
@@ -243,7 +240,9 @@ func NewAttributeSetWithId(id []byte) (AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
-	return NewAttributeSet().Add(CkaId, id)
+	a := NewAttributeSet()
+	_ = a.Add(CkaId, id) // error not possible for []byte
+	return a, nil
 }
 
 // NewAttributeSetWithIDAndLabel is a helper function that populates a new slice of Attributes with the
@@ -256,5 +255,7 @@ func NewAttributeSetWithIDAndLabel(id, label []byte) (a AttributeSet, err error)
 	if err := notNilBytes(label, "label"); err != nil {
 		return nil, err
 	}
-	return a.Add(CkaLabel, label)
+
+	_ = a.Add(CkaLabel, label) // error not possible with []byte
+	return a, nil
 }
