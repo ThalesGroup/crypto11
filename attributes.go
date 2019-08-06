@@ -180,28 +180,15 @@ func NewAttributeSet() AttributeSet {
 	return make(AttributeSet)
 }
 
-// Add creates a new Attribute and adds it to the AttributeSet. This function will return an error if value is
-// not of type bool, int, uint, string, []byte or time.Time (or is nil).
-func (a AttributeSet) Add(attributeType AttributeType, value interface{}) error {
+// Set stores a new attribute in the AttributeSet. Any existing value will be overwritten. This function will return an
+// error if value is not of type bool, int, uint, string, []byte or time.Time (or is nil).
+func (a AttributeSet) Set(attributeType AttributeType, value interface{}) error {
 	attr, err := NewAttribute(attributeType, value)
 	if err != nil {
 		return err
 	}
 	a[attributeType] = attr
 	return nil
-}
-
-// Set adds the attribute to the AttributeSet overwriting the preexisting entry.
-func (a AttributeSet) Set(attribute *Attribute) {
-	a[attribute.Type] = attribute
-}
-
-// Merge adds all the provided attributes into this set. Existing attributes of the same time will
-// be overwritten.
-func (a AttributeSet) Merge(additional AttributeSet) {
-	for _, attribute := range additional {
-		a[attribute.Type] = attribute
-	}
 }
 
 // AddIfNotPresent adds the attributes if the Attribute Type is not already present in the AttributeSet.
@@ -234,21 +221,21 @@ func (a AttributeSet) Copy() AttributeSet {
 	return b
 }
 
-// NewAttributeSetWithId is a helper function that populates a new slice of Attributes with the provided ID.
+// NewAttributeSetWithID is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
-func NewAttributeSetWithId(id []byte) (AttributeSet, error) {
+func NewAttributeSetWithID(id []byte) (AttributeSet, error) {
 	if err := notNilBytes(id, "id"); err != nil {
 		return nil, err
 	}
 	a := NewAttributeSet()
-	_ = a.Add(CkaId, id) // error not possible for []byte
+	_ = a.Set(CkaId, id) // error not possible for []byte
 	return a, nil
 }
 
 // NewAttributeSetWithIDAndLabel is a helper function that populates a new slice of Attributes with the
 // provided ID and Label. This function returns an error if either the ID or the Label is an empty slice.
 func NewAttributeSetWithIDAndLabel(id, label []byte) (a AttributeSet, err error) {
-	if a, err = NewAttributeSetWithId(id); err != nil {
+	if a, err = NewAttributeSetWithID(id); err != nil {
 		return nil, err
 	}
 
@@ -256,6 +243,6 @@ func NewAttributeSetWithIDAndLabel(id, label []byte) (a AttributeSet, err error)
 		return nil, err
 	}
 
-	_ = a.Add(CkaLabel, label) // error not possible with []byte
+	_ = a.Set(CkaLabel, label) // error not possible with []byte
 	return a, nil
 }

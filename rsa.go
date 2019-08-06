@@ -89,7 +89,7 @@ func (c *Context) GenerateRSAKeyPair(id []byte, bits int) (SignerDecrypter, erro
 		return nil, errClosed
 	}
 
-	public, err := NewAttributeSetWithId(id)
+	public, err := NewAttributeSetWithID(id)
 	if err != nil {
 		return nil, err
 	}

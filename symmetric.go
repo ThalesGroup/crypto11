@@ -259,7 +259,7 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 		return nil, errClosed
 	}
 
-	template, err := NewAttributeSetWithId(id)
+	template, err := NewAttributeSetWithID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 			})
 
 			if bits > 0 {
-				template.Add(pkcs11.CKA_VALUE_LEN, bits/8)
+				template.Set(pkcs11.CKA_VALUE_LEN, bits/8)
 			}
 
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
