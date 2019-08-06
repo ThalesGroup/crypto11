@@ -234,8 +234,9 @@ func (c *Context) GenerateECDSAKeyPairWithLabel(id, label []byte, curve elliptic
 	return c.GenerateECDSAKeyPairWithAttributes(public, private, curve)
 }
 
-// GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. Required Attributes that are missing
-// in the provided "public" and "private" AttributeSets will be set to a default value.
+// GenerateECDSAKeyPairWithAttributes generates an ECDSA key pair on the token. After this function returns, public and
+// private will contain the attributes applied to the key pair. If required attributes are missing, they will be set to
+// a default value.
 func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSet, curve elliptic.Curve) (k Signer, err error) {
 	if c.closed.Get() {
 		return nil, errClosed

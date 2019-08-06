@@ -117,8 +117,9 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 	return c.GenerateRSAKeyPairWithAttributes(public, private, bits)
 }
 
-// GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. Required Attributes that are missing
-// in the provided "public" and "private" AttributeSets will be set to a default value.
+// GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. After this function returns, public and
+// private will contain the attributes applied to the key pair. If required attributes are missing, they will be set to
+// a default value.
 func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet, bits int) (key SignerDecrypter, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
