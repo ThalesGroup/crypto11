@@ -259,11 +259,11 @@ func (c *Context) GenerateSecretKey(id []byte, bits int, cipher *SymmetricCipher
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributeSetWithID(id)
+	if err != nil {
 		return nil, err
 	}
-
-	return c.generateSecretKey(id, nil, bits, cipher)
+	return c.GenerateSecretKeyWithAttributes(template, bits, cipher)
 }
 
 // GenerateSecretKey creates an secret key of given length and type. The id and label parameters are used to
@@ -273,26 +273,29 @@ func (c *Context) GenerateSecretKeyWithLabel(id, label []byte, bits int, cipher 
 		return nil, errClosed
 	}
 
-	if err := notNilBytes(id, "id"); err != nil {
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
+	if err != nil {
 		return nil, err
 	}
-	if err := notNilBytes(label, "label"); err != nil {
-		return nil, err
-	}
-
-	return c.generateSecretKey(id, label, bits, cipher)
+	return c.GenerateSecretKeyWithAttributes(template, bits, cipher)
 
 }
 
-// generateSecretKey creates an secret key of given length and type.
-func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+// GenerateSecretKeyWithAttributes creates an secret key of given length and type. After this function returns, template
+// will contain the attributes applied to the key. If required attributes are missing, they will be set to a default
+// value.
+func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits int, cipher *SymmetricCipher) (k *SecretKey, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	err = c.withSession(func(session *pkcs11Session) error {
 
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
 		for _, genMech := range cipher.GenParams {
-			secretKeyTemplate := []*pkcs11.Attribute{
+			template.AddIfNotPresent([]*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
 				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
 				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
@@ -302,21 +305,15 @@ func (c *Context) generateSecretKey(id, label []byte, bits int, cipher *Symmetri
 				pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
 				pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-			}
-
-			if id != nil {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
-			}
-			if label != nil {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
-			}
+			})
 
 			if bits > 0 {
-				secretKeyTemplate = append(secretKeyTemplate, pkcs11.NewAttribute(pkcs11.CKA_VALUE_LEN, bits/8))
+				template.Set(pkcs11.CKA_VALUE_LEN, bits/8)
 			}
+
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
 
-			privHandle, err := session.ctx.GenerateKey(session.handle, mech, secretKeyTemplate)
+			privHandle, err := session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
 			if err == nil {
 				k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 				return nil
