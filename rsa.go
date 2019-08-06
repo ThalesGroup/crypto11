@@ -120,12 +120,14 @@ func (c *Context) GenerateRSAKeyPairWithLabel(id, label []byte, bits int) (Signe
 // GenerateRSAKeyPairWithAttributes generates an RSA key pair on the token. After this function returns, public and
 // private will contain the attributes applied to the key pair. If required attributes are missing, they will be set to
 // a default value.
-func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet, bits int) (key SignerDecrypter, err error) {
+func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet, bits int) (SignerDecrypter, error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
 
-	err = c.withSession(func(session *pkcs11Session) error {
+	var k SignerDecrypter
+
+	err := c.withSession(func(session *pkcs11Session) error {
 
 		public.AddIfNotPresent([]*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_PUBLIC_KEY),
@@ -157,7 +159,7 @@ func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet,
 		if err != nil {
 			return err
 		}
-		key = &pkcs11PrivateKeyRSA{
+		k = &pkcs11PrivateKeyRSA{
 			pkcs11PrivateKey: pkcs11PrivateKey{
 				pkcs11Object: pkcs11Object{
 					handle:  privHandle,
@@ -168,7 +170,7 @@ func (c *Context) GenerateRSAKeyPairWithAttributes(public, private AttributeSet,
 			}}
 		return nil
 	})
-	return
+	return k, err
 }
 
 // Decrypt decrypts a message using a RSA key.
