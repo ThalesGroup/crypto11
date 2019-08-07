@@ -107,7 +107,11 @@ func (c *Context) ImportCertificate(id []byte, certificate *x509.Certificate) er
 		return err
 	}
 
-	return c.importCertificate(id, nil, certificate)
+	template, err := NewAttributeSetWithID(id)
+	if err != nil {
+		return err
+	}
+	return c.ImportCertificateWithAttributes(template, certificate)
 }
 
 // ImportCertificateWithLabel imports a certificate onto the token.  The id and label parameters are used to
@@ -124,10 +128,17 @@ func (c *Context) ImportCertificateWithLabel(id []byte, label []byte, certificat
 		return err
 	}
 
-	return c.importCertificate(id, label, certificate)
+	template, err := NewAttributeSetWithIDAndLabel(id, label)
+	if err != nil {
+		return err
+	}
+	return c.ImportCertificateWithAttributes(template, certificate)
 }
 
-func (c *Context) importCertificate(id []byte, label []byte, certificate *x509.Certificate) error {
+// ImportCertificateWithAttributes imports a certificate onto the token. After this function returns, template
+// will contain the attributes applied to the certificate. If required attributes are missing, they will be set to a
+// default value.
+func (c *Context) ImportCertificateWithAttributes(template AttributeSet, certificate *x509.Certificate) error {
 	if certificate == nil {
 		return errors.New("certificate cannot be nil")
 	}
@@ -137,21 +148,19 @@ func (c *Context) importCertificate(id []byte, label []byte, certificate *x509.C
 		return err
 	}
 
-	err = c.withSession(func(session *pkcs11Session) error {
-		attributes := []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
-			pkcs11.NewAttribute(pkcs11.CKA_CERTIFICATE_TYPE, pkcs11.CKC_X_509),
-			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-			pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, false),
-			pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, certificate.RawSubject),
-			pkcs11.NewAttribute(pkcs11.CKA_ISSUER, certificate.RawIssuer),
-			pkcs11.NewAttribute(pkcs11.CKA_LABEL, label),
-			pkcs11.NewAttribute(pkcs11.CKA_ID, id),
-			pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, serial),
-			pkcs11.NewAttribute(pkcs11.CKA_VALUE, certificate.Raw),
-		}
+	template.AddIfNotPresent([]*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
+		pkcs11.NewAttribute(pkcs11.CKA_CERTIFICATE_TYPE, pkcs11.CKC_X_509),
+		pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+		pkcs11.NewAttribute(pkcs11.CKA_PRIVATE, false),
+		pkcs11.NewAttribute(pkcs11.CKA_SUBJECT, certificate.RawSubject),
+		pkcs11.NewAttribute(pkcs11.CKA_ISSUER, certificate.RawIssuer),
+		pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, serial),
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE, certificate.Raw),
+	})
 
-		_, err = session.ctx.CreateObject(session.handle, attributes)
+	err = c.withSession(func(session *pkcs11Session) error {
+		_, err = session.ctx.CreateObject(session.handle, template.ToSlice())
 		return err
 	})
 

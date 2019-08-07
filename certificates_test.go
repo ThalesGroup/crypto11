@@ -22,38 +22,18 @@
 package crypto11
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
-	"encoding/pem"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const testCertificate = `-----BEGIN CERTIFICATE----- 
-MIID6TCCA1ICAQEwDQYJKoZIhvcNAQEFBQAwgYsxCzAJBgNVBAYTAlVTMRMwEQYD
-VQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1TYW4gRnJhbmNpc2NvMRQwEgYDVQQK
-EwtHb29nbGUgSW5jLjEMMAoGA1UECxMDRW5nMQwwCgYDVQQDEwNhZ2wxHTAbBgkq 
-hkiG9w0BCQEWDmFnbEBnb29nbGUuY29tMB4XDTA5MDkwOTIyMDU0M1oXDTEwMDkw  
-OTIyMDU0M1owajELMAkGA1UEBhMCQVUxEzARBgNVBAgTClNvbWUtU3RhdGUxITAf  	  
-BgNVBAoTGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDEjMCEGA1UEAxMaZXVyb3Bh		  
-LnNmby5jb3JwLmdvb2dsZS5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK
-AoICAQC6pgYt7/EibBDumASF+S0qvqdL/f+nouJw2T1Qc8GmXF/iiUcrsgzh/Fd8
-pDhz/T96Qg9IyR4ztuc2MXrmPra+zAuSf5bevFReSqvpIt8Duv0HbDbcqs/XKPfB
-uMDe+of7a9GCywvAZ4ZUJcp0thqD9fKTTjUWOBzHY1uNE4RitrhmJCrbBGXbJ249
-bvgmb7jgdInH2PU7PT55hujvOoIsQW2osXBFRur4pF1wmVh4W4lTLD6pjfIMUcML
-ICHEXEN73PDic8KS3EtNYCwoIld+tpIBjE1QOb1KOyuJBNW6Esw9ALZn7stWdYcE
-qAwvv20egN2tEXqj7Q4/1ccyPZc3PQgC3FJ8Be2mtllM+80qf4dAaQ/fWvCtOrQ5
-pnfe9juQvCo8Y0VGlFcrSys/MzSg9LJ/24jZVgzQved/Qupsp89wVidwIzjt+WdS
-fyWfH0/v1aQLvu5cMYuW//C0W2nlYziL5blETntM8My2ybNARy3ICHxCBv2RNtPI
-WQVm+E9/W5rwh2IJR4DHn2LHwUVmT/hHNTdBLl5Uhwr4Wc7JhE7AVqb14pVNz1lr
-5jxsp//ncIwftb7mZQ3DF03Yna+jJhpzx8CQoeLT6aQCHyzmH68MrHHT4MALPyUs
-Pomjn71GNTtDeWAXibjCgdL6iHACCF6Htbl0zGlG0OAK+bdn0QIDAQABMA0GCSqG
-SIb3DQEBBQUAA4GBAOKnQDtqBV24vVqvesL5dnmyFpFPXBn3WdFfwD6DzEb21UVG
-5krmJiu+ViipORJPGMkgoL6BjU21XI95VQbun5P8vvg8Z+FnFsvRFY3e1CCzAVQY
-ZsUkLw2I7zI/dNlWdB8Xp7v+3w9sX5N3J/WuJ1KOO5m26kRlHQo7EzT3974g
------END CERTIFICATE-----   
-`
 
 func TestCertificate(t *testing.T) {
 	ctx, err := ConfigureFromFile("config")
@@ -66,11 +46,7 @@ func TestCertificate(t *testing.T) {
 	id := randomBytes()
 	label := randomBytes()
 
-	block, _ := pem.Decode([]byte(testCertificate))
-	require.NotNil(t, block.Bytes)
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err)
+	cert := generateRandomCert(t)
 
 	err = ctx.ImportCertificateWithLabel(id, label, cert)
 	require.NoError(t, err)
@@ -92,6 +68,40 @@ func TestCertificate(t *testing.T) {
 	assert.Equal(t, cert.Signature, cert2.Signature)
 }
 
+// Test that provided attributes override default values
+func TestCertificateAttributes(t *testing.T) {
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	cert := generateRandomCert(t)
+
+	// We import this with a different serial number, to test this is obeyed
+	ourSerial := new(big.Int)
+	ourSerial.Add(cert.SerialNumber, big.NewInt(1))
+
+	derSerial, err := asn1.Marshal(ourSerial)
+	require.NoError(t, err)
+
+	template := NewAttributeSet()
+	err = template.Set(CkaSerialNumber, derSerial)
+	require.NoError(t, err)
+
+	err = ctx.ImportCertificateWithAttributes(template, cert)
+	require.NoError(t, err)
+
+	// Try to find with old serial
+	c, err := ctx.FindCertificate(nil, nil, cert.SerialNumber)
+	assert.Nil(t, c)
+
+	// Find with new serial
+	c, err = ctx.FindCertificate(nil, nil, ourSerial)
+	assert.NotNil(t, c)
+}
+
 func TestCertificateRequiredArgs(t *testing.T) {
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
@@ -100,11 +110,7 @@ func TestCertificateRequiredArgs(t *testing.T) {
 		require.NoError(t, ctx.Close())
 	}()
 
-	block, _ := pem.Decode([]byte(testCertificate))
-	assert.NotNil(t, block.Bytes)
-
-	cert, err := x509.ParseCertificate(block.Bytes)
-	assert.NoError(t, err)
+	cert := generateRandomCert(t)
 
 	val := randomBytes()
 
@@ -116,4 +122,33 @@ func TestCertificateRequiredArgs(t *testing.T) {
 
 	err = ctx.ImportCertificateWithLabel(val, val, nil)
 	require.Error(t, err)
+}
+
+func generateRandomCert(t *testing.T) *x509.Certificate {
+	serial, err := rand.Int(rand.Reader, big.NewInt(20000))
+	require.NoError(t, err)
+
+	ca := &x509.Certificate{
+		Subject: pkix.Name{
+			CommonName: "Foo",
+		},
+		SerialNumber:          serial,
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+
+	key, err := rsa.GenerateKey(rand.Reader, 4096)
+	require.NoError(t, err)
+
+	csr := &key.PublicKey
+	certBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, csr, key)
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(certBytes)
+	require.NoError(t, err)
+
+	return cert
 }
