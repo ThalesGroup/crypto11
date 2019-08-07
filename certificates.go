@@ -1,4 +1,4 @@
-// Copyright 2016, 2017 Thales e-Security, Inc
+// Copyright 2019 Thales e-Security, Inc
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -30,12 +30,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-// FindCertificate retrieves a previously imported certificate
-//
-// Either (but not all three) of id, label and serial may be nil, in which case they are ignored.
+// FindCertificate retrieves a previously imported certificate. Any combination of id, label
+// and serial can be provided. An error is return if all are nil.
 func (c *Context) FindCertificate(id []byte, label []byte, serial *big.Int) (*x509.Certificate, error) {
-	var handles []pkcs11.ObjectHandle
-	var template []*pkcs11.Attribute
 
 	if c.closed.Get() {
 		return nil, errClosed
@@ -44,8 +41,11 @@ func (c *Context) FindCertificate(id []byte, label []byte, serial *big.Int) (*x5
 	var cert *x509.Certificate
 	err := c.withSession(func(session *pkcs11Session) (err error) {
 		if id == nil && label == nil && serial == nil {
-			return errors.New("id, label and serial cannot both be nil")
+			return errors.New("id, label and serial cannot all be nil")
 		}
+
+		var template []*pkcs11.Attribute
+
 		if id != nil {
 			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
 		}
@@ -72,7 +72,9 @@ func (c *Context) FindCertificate(id []byte, label []byte, serial *big.Int) (*x5
 				err = finalErr
 			}
 		}()
-		if handles, _, err = session.ctx.FindObjects(session.handle, 1); err != nil {
+
+		handles, _, err := session.ctx.FindObjects(session.handle, 1)
+		if err != nil {
 			return err
 		}
 		if len(handles) == 0 {
@@ -88,16 +90,18 @@ func (c *Context) FindCertificate(id []byte, label []byte, serial *big.Int) (*x5
 		}
 
 		cert, err = x509.ParseCertificate(attributes[0].Value)
-
 		return err
 	})
 
 	return cert, err
 }
 
-// ImportCertificate imports a certificate onto the token.  he id parameter is used to
+// ImportCertificate imports a certificate onto the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) ImportCertificate(id []byte, certificate *x509.Certificate) error {
+	if c.closed.Get() {
+		return errClosed
+	}
 
 	if err := notNilBytes(id, "id"); err != nil {
 		return err
@@ -109,6 +113,9 @@ func (c *Context) ImportCertificate(id []byte, certificate *x509.Certificate) er
 // ImportCertificateWithLabel imports a certificate onto the token.  The id and label parameters are used to
 // set CKA_ID and CKA_LABEL respectively and must be non-nil.
 func (c *Context) ImportCertificateWithLabel(id []byte, label []byte, certificate *x509.Certificate) error {
+	if c.closed.Get() {
+		return errClosed
+	}
 
 	if err := notNilBytes(id, "id"); err != nil {
 		return err
@@ -121,13 +128,16 @@ func (c *Context) ImportCertificateWithLabel(id []byte, label []byte, certificat
 }
 
 func (c *Context) importCertificate(id []byte, label []byte, certificate *x509.Certificate) error {
+	if certificate == nil {
+		return errors.New("certificate cannot be nil")
+	}
 
 	serial, err := asn1.Marshal(certificate.SerialNumber)
 	if err != nil {
 		return err
 	}
 
-	err = c.withSession(func(session *pkcs11Session) (err error) {
+	err = c.withSession(func(session *pkcs11Session) error {
 		attributes := []*pkcs11.Attribute{
 			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
 			pkcs11.NewAttribute(pkcs11.CKA_CERTIFICATE_TYPE, pkcs11.CKC_X_509),
@@ -142,7 +152,6 @@ func (c *Context) importCertificate(id []byte, label []byte, certificate *x509.C
 		}
 
 		_, err = session.ctx.CreateObject(session.handle, attributes)
-
 		return err
 	})
 

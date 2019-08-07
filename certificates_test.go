@@ -113,4 +113,7 @@ func TestCertificateRequiredArgs(t *testing.T) {
 
 	err = ctx.ImportCertificateWithLabel(val, nil, cert)
 	require.Error(t, err)
+
+	err = ctx.ImportCertificateWithLabel(val, val, nil)
+	require.Error(t, err)
 }
