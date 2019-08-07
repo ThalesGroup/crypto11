@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/miekg/pkcs11"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -265,4 +267,23 @@ func TestAccessSameLibraryTwice(t *testing.T) {
 
 	err = ctx3.Close()
 	require.NoError(t, err)
+}
+
+func TestNoLogin(t *testing.T) {
+	// To test that no login is respected, we attempt to perform an operation on our
+	// SoftHSM HSM without logging in and check for the error.
+	cfg, err := getConfig("config")
+	require.NoError(t, err)
+	cfg.LoginNotSupported = true
+
+	ctx, err := Configure(cfg)
+	require.NoError(t, err)
+
+	_, err = ctx.GenerateSecretKey(randomBytes(), 256, CipherAES)
+	require.Error(t, err)
+
+	p11Err, ok := err.(pkcs11.Error)
+	require.True(t, ok)
+
+	assert.Equal(t, pkcs11.Error(pkcs11.CKR_USER_NOT_LOGGED_IN), p11Err)
 }
