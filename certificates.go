@@ -24,6 +24,7 @@ package crypto11
 import (
 	"crypto/x509"
 	"encoding/asn1"
+	"math/big"
 
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
@@ -32,8 +33,7 @@ import (
 // FindCertificate retrieves a previously imported certificate
 //
 // Either (but not all three) of id, label and serial may be nil, in which case they are ignored.
-// If specified, serial should be the ASN.1 Integer DER-encoding of the certificate serial number.
-func (c *Context) FindCertificate(id []byte, label []byte, serial []byte) (*x509.Certificate, error) {
+func (c *Context) FindCertificate(id []byte, label []byte, serial *big.Int) (*x509.Certificate, error) {
 	var handles []pkcs11.ObjectHandle
 	var template []*pkcs11.Attribute
 
@@ -53,7 +53,12 @@ func (c *Context) FindCertificate(id []byte, label []byte, serial []byte) (*x509
 			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 		}
 		if serial != nil {
-			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, serial))
+			derSerial, err := asn1.Marshal(serial)
+			if err != nil {
+				return errors.WithMessage(err, "failed to encode serial")
+			}
+
+			template = append(template, pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, derSerial))
 		}
 
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))

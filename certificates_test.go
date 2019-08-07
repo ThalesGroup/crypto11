@@ -22,7 +22,6 @@
 package crypto11
 
 import (
-	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"testing"
@@ -68,34 +67,29 @@ func TestCertificate(t *testing.T) {
 	label := randomBytes()
 
 	block, _ := pem.Decode([]byte(testCertificate))
-	assert.NotNil(t, block.Bytes)
+	require.NotNil(t, block.Bytes)
 
 	cert, err := x509.ParseCertificate(block.Bytes)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = ctx.ImportCertificateWithLabel(id, label, cert)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cert2, err := ctx.FindCertificate(nil, label, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, cert2)
+	require.NoError(t, err)
+	require.NotNil(t, cert2)
 
-	if !bytes.Equal(cert2.Signature, cert.Signature) {
-		t.Errorf("invalid certificate")
-		return
-	}
+	assert.Equal(t, cert.Signature, cert2.Signature)
 
 	cert2, err = ctx.FindCertificate(nil, []byte("test2"), nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, cert2)
 
-	cert2, err = ctx.FindCertificate(nil, nil, cert.SerialNumber.Bytes())
-	assert.NoError(t, err)
-	assert.NotNil(t, cert2)
+	cert2, err = ctx.FindCertificate(nil, nil, cert.SerialNumber)
+	require.NoError(t, err)
+	require.NotNil(t, cert2)
 
-	ok := bytes.Equal(cert2.Signature, cert.Signature)
-	assert.True(t, ok)
-
+	assert.Equal(t, cert.Signature, cert2.Signature)
 }
 
 func TestCertificateRequiredArgs(t *testing.T) {
