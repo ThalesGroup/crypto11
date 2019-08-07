@@ -24,6 +24,8 @@ package crypto11
 import (
 	"crypto/dsa"
 	"crypto/elliptic"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -109,5 +111,17 @@ func TestErrorAfterClosed(t *testing.T) {
 	require.Equal(t, errClosed, err)
 
 	_, err = ctx.NewRandomReader()
+	require.Equal(t, errClosed, err)
+
+	block, _ := pem.Decode([]byte(testCertificate))
+	require.NotNil(t, block.Bytes)
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	require.NoError(t, err)
+
+	err = ctx.ImportCertificate(bytes, cert)
+	require.Equal(t, errClosed, err)
+
+	err = ctx.ImportCertificateWithLabel(bytes, bytes, cert)
 	require.Equal(t, errClosed, err)
 }
