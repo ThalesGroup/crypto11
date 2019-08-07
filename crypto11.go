@@ -241,6 +241,9 @@ type Config struct {
 
 	// Maximum time to wait for a session from the sessions pool. Zero means wait indefinitely.
 	PoolWaitTimeout time.Duration
+
+	// LoginNotSupported should be set to true for tokens that do not support logging in.
+	LoginNotSupported bool
 }
 
 // refCount counts the number of contexts using a particular P11 library. It must not be read or modified
@@ -316,8 +319,8 @@ func Configure(config *Config) (*Context, error) {
 	// We will use one session to keep state alive, so the pool gets maxSessions - 1
 	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0)
 
-	// Create a long-term session and log it in. This session won't be used by callers, instead it is used to keep
-	// a connection alive to the token to ensure object handles and the log in status remain accessible.
+	// Create a long-term session and log it in (if supported). This session won't be used by callers, instead it is
+	// used to keep a connection alive to the token to ensure object handles and the log in status remain accessible.
 	instance.persistentSession, err = instance.ctx.OpenSession(instance.slot, pkcs11.CKF_SERIAL_SESSION|pkcs11.CKF_RW_SESSION)
 	if err != nil {
 		_ = instance.ctx.Finalize()
@@ -325,17 +328,19 @@ func Configure(config *Config) (*Context, error) {
 		return nil, errors.WithMessagef(err, "failed to create long term session")
 	}
 
-	// Try to log in our persistent session. This may fail with CKR_USER_ALREADY_LOGGED_IN if another instance
-	// already exists.
-	err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
-	if err != nil {
+	if !config.LoginNotSupported {
+		// Try to log in our persistent session. This may fail with CKR_USER_ALREADY_LOGGED_IN if another instance
+		// already exists.
+		err = instance.ctx.Login(instance.persistentSession, pkcs11.CKU_USER, instance.cfg.Pin)
+		if err != nil {
 
-		pErr, isP11Error := err.(pkcs11.Error)
+			pErr, isP11Error := err.(pkcs11.Error)
 
-		if !isP11Error || pErr != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
-			_ = instance.ctx.Finalize()
-			instance.ctx.Destroy()
-			return nil, errors.WithMessagef(err, "failed to log into long term session")
+			if !isP11Error || pErr != pkcs11.CKR_USER_ALREADY_LOGGED_IN {
+				_ = instance.ctx.Finalize()
+				instance.ctx.Destroy()
+				return nil, errors.WithMessagef(err, "failed to log into long term session")
+			}
 		}
 	}
 
