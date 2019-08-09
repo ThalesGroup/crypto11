@@ -139,6 +139,10 @@ func (c *Context) ImportCertificateWithLabel(id []byte, label []byte, certificat
 // will contain the attributes applied to the certificate. If required attributes are missing, they will be set to a
 // default value.
 func (c *Context) ImportCertificateWithAttributes(template AttributeSet, certificate *x509.Certificate) error {
+	if c.closed.Get() {
+		return errClosed
+	}
+
 	if certificate == nil {
 		return errors.New("certificate cannot be nil")
 	}

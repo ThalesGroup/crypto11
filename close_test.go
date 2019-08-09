@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,43 +81,46 @@ func TestErrorAfterClosed(t *testing.T) {
 	bytes := randomBytes()
 
 	_, err = ctx.FindKey(bytes, nil)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.FindKeyPair(bytes, nil)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateSecretKey(bytes, 256, CipherAES)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateSecretKeyWithLabel(bytes, bytes, 256, CipherAES)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateRSAKeyPair(bytes, 2048)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateRSAKeyPairWithLabel(bytes, bytes, 2048)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateDSAKeyPair(bytes, dsaSizes[dsa.L1024N160])
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateDSAKeyPairWithLabel(bytes, bytes, dsaSizes[dsa.L1024N160])
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateECDSAKeyPair(bytes, elliptic.P224())
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateECDSAKeyPairWithLabel(bytes, bytes, elliptic.P224())
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.NewRandomReader()
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	cert := generateRandomCert(t)
 
 	err = ctx.ImportCertificate(bytes, cert)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
 
 	err = ctx.ImportCertificateWithLabel(bytes, bytes, cert)
-	require.Equal(t, errClosed, err)
+	assert.Equal(t, errClosed, err)
+
+	err = ctx.ImportCertificateWithAttributes(NewAttributeSet(), cert)
+	assert.Equal(t, errClosed, err)
 }
