@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"context"
+	"errors"
 
 	"github.com/miekg/pkcs11"
 	"github.com/vitessio/vitess/go/pools"
@@ -65,8 +66,10 @@ func (c *Context) getSession() (*pkcs11Session, error) {
 
 	resource, err := c.pool.Get(ctx)
 	if err == pools.ErrClosed {
-		// Our Context must have been closed, return a nicer error
-		return nil, errClosed
+		// Our Context must have been closed, return a nicer error.
+		// We don't use errClosed to ensure our tests identify functions that aren't checking for closure
+		// correctly.
+		return nil, errors.New("context is closed")
 	}
 	if err != nil {
 		return nil, err
