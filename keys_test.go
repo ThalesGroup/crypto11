@@ -18,6 +18,12 @@ func TestFindKeysRequiresIdOrLabel(t *testing.T) {
 	_, err = ctx.FindKey(nil, nil)
 	assert.Error(t, err)
 
+	_, err = ctx.FindKeys(nil, nil)
+	assert.Error(t, err)
+
 	_, err = ctx.FindKeyPair(nil, nil)
+	assert.Error(t, err)
+
+	_, err = ctx.FindKeyPairs(nil, nil)
 	assert.Error(t, err)
 }

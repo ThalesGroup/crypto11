@@ -183,6 +183,41 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 	return result[0], nil
 }
 
+// FindKeyPairs retrieves all matching asymmetric key pairs, or a nil slice if none can be found.
+//
+// At least one of id and label must be specified.
+// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
+// implement crypto.Signer without the public key.
+func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
+	if id == nil && label == nil {
+		return nil, errors.New("id and label cannot both be nil")
+	}
+
+	attributes := NewAttributeSet()
+
+	if id != nil {
+		attributes[CkaId] = pkcs11.NewAttribute(CkaId, id)
+	}
+	if label != nil {
+		attributes[CkaLabel] = pkcs11.NewAttribute(CkaLabel, label)
+	}
+
+	return c.FindKeyPairsWithAttributes(attributes)
+}
+
+func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, error) {
+	result, err := c.FindKeyPairsWithAttributes(attributes)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result[0], nil
+}
+
 // FindKeyPairsWithAttributes retrieves previously created asymmetric key pairs, or nil if none can be found.
 // The given attributes are matched against the private half only. Then the public half with a matching CKA_ID
 // value is found.
@@ -223,28 +258,6 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) ([]Signer,
 	})
 
 	return keys, err
-}
-
-// FindKeyPairs retrieves all matching asymmetric key pairs, or a nil slice if none can be found.
-//
-// At least one of id and label must be specified.
-// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
-// implement crypto.Signer without the public key.
-func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
-	}
-
-	attributes := NewAttributeSet()
-
-	if id != nil {
-		attributes[CkaId] = pkcs11.NewAttribute(CkaId, id)
-	}
-	if label != nil {
-		attributes[CkaLabel] = pkcs11.NewAttribute(CkaLabel, label)
-	}
-
-	return c.FindKeyPairsWithAttributes(attributes)
 }
 
 // FindAllKeyPairs retrieves all existing asymmetric key pairs, or a nil slice if none can be found.
@@ -311,6 +324,23 @@ func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
 //
 // At least one of id and label must be specified.
 func (c *Context) FindKeys(id []byte, label []byte) ([]*SecretKey, error) {
+	return nil, errors.Errorf("Not yet supported")
+}
+
+func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, error) {
+	result, err := c.FindKeysWithAttributes(attributes)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result[0], nil
+}
+
+func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey, error) {
 	return nil, errors.Errorf("Not yet supported")
 }
 
