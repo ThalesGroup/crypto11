@@ -281,50 +281,36 @@ func (k pkcs11PrivateKey) Public() crypto.PublicKey {
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
-	if c.closed.Get() {
-		return nil, errClosed
+	result, err := c.FindKeys(id, label)
+	if err != nil {
+		return nil, err
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(result) == 0 {
+		return nil, nil
 	}
 
-	var k *SecretKey
-
-	err := c.withSession(func(session *pkcs11Session) error {
-		privHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_SECRET_KEY), nil)
-		if err != nil {
-			return err
-		}
-		if privHandle == nil {
-			// Key does not exist
-			return nil
-		}
-
-		attributes := []*pkcs11.Attribute{
-			pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
-		}
-		if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
-			return err
-		}
-		keyType := bytesToUlong(attributes[0].Value)
-
-		if cipher, ok := Ciphers[int(keyType)]; ok {
-			k = &SecretKey{pkcs11Object{*privHandle, c}, cipher}
-		} else {
-			return errors.Errorf("unsupported key type: %X", keyType)
-		}
-		return nil
-	})
-
-	return k, err
+	return result[0], nil
 }
 
 // FindKeys retrieves all matching symmetric keys, or a nil slice if none can be found.
 //
 // At least one of id and label must be specified.
 func (c *Context) FindKeys(id []byte, label []byte) ([]*SecretKey, error) {
-	return nil, errors.Errorf("Not yet supported")
+	if id == nil && label == nil {
+		return nil, errors.New("id and label cannot both be nil")
+	}
+
+	attributes := NewAttributeSet()
+
+	if id != nil {
+		attributes[CkaId] = pkcs11.NewAttribute(CkaId, id)
+	}
+	if label != nil {
+		attributes[CkaLabel] = pkcs11.NewAttribute(CkaLabel, label)
+	}
+
+	return c.FindKeysWithAttributes(attributes)
 }
 
 func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, error) {
@@ -341,12 +327,52 @@ func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, er
 }
 
 func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey, error) {
-	return nil, errors.Errorf("Not yet supported")
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	var keys []*SecretKey
+
+	if _, ok := attributes[CkaClass]; ok {
+		return nil, errors.Errorf("key attribute set must not contain CkaClass")
+	}
+
+	err := c.withSession(func(session *pkcs11Session) error {
+		// Add the private key class to the template to find the private half
+		privAttributes := attributes.Copy()
+		privAttributes[CkaClass] = pkcs11.NewAttribute(CkaClass, pkcs11.CKO_SECRET_KEY)
+
+		privHandles, err := findKeysWithAttributes(session, privAttributes.ToSlice())
+		if err != nil {
+			return err
+		}
+
+		for _, privHandle := range(privHandles) {
+			attributes := []*pkcs11.Attribute{
+				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
+			}
+			if attributes, err = session.ctx.GetAttributeValue(session.handle, privHandle, attributes); err != nil {
+				return err
+			}
+			keyType := bytesToUlong(attributes[0].Value)
+
+			if cipher, ok := Ciphers[int(keyType)]; ok {
+				k := &SecretKey{pkcs11Object{privHandle, c}, cipher}
+				keys = append(keys, k)
+			} else {
+				return errors.Errorf("unsupported key type: %X", keyType)
+			}
+		}
+
+		return nil
+	})
+
+	return keys, err
 }
 
 // FindAllKeyPairs retrieves all existing symmetric keys, or a nil slice if none can be found.
 func (c *Context) FindAllKeys() ([]*SecretKey, error) {
-	return nil, errors.Errorf("Not yet supported")
+	return c.FindKeysWithAttributes(NewAttributeSet())
 }
 
 func uintPtr(i uint) *uint { return &i }
