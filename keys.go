@@ -23,7 +23,6 @@ package crypto11
 
 import (
 	"crypto"
-
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
@@ -378,24 +377,49 @@ func (c *Context) FindAllKeys() ([]*SecretKey, error) {
 func uintPtr(i uint) *uint { return &i }
 
 // GetAttributes gets the values of the specified attributes on the given key
-func (c *Context) GetAttributes(signer *crypto.Signer, attributes []AttributeType) (a AttributeSet, err error) {
+func (c *Context) GetAttributes(signer crypto.Signer, attributes []AttributeType) (a AttributeSet, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
 
-	//if sig, ok := (*signer).(Signer); !ok {
-	//	nil, return errors.Errorf("not a PKCS#11 key")
-	//}
-	//
-	//err := c.withSession(func(session *pkcs11Session) error {
-	//	session.ctx.GetAttributeValue(session.handle, )
-	//})
+	var handle pkcs11.ObjectHandle
 
-	return nil, errors.Errorf("Not yet supported")
+	switch s := (signer).(type) {
+	case *pkcs11PrivateKeyDSA:
+		handle = s.handle
+	case *pkcs11PrivateKeyRSA:
+		handle = s.handle
+	case *pkcs11PrivateKeyECDSA:
+		handle = s.handle
+	default:
+		return nil, errors.Errorf("not a PKCS#11 key")
+	}
+
+	values := NewAttributeSet()
+
+	err = c.withSession(func(session *pkcs11Session) error {
+		var attrs []*pkcs11.Attribute
+		for _, a := range(attributes) {
+			attrs = append(attrs, pkcs11.NewAttribute(a, nil))
+		}
+
+		p11values, err := session.ctx.GetAttributeValue(session.handle, handle, attrs)
+		if err != nil {
+			return err
+		}
+
+		for _, a := range(p11values) {
+			values[a.Type] = pkcs11.NewAttribute(a.Type, a.Value)
+		}
+
+		return nil
+	})
+
+	return values, err
 }
 
 // GetAttributes gets the value of the specified attribute on the given key
-func (c *Context) GetAttribute(signer *crypto.Signer, attribute AttributeType) (a *Attribute, err error) {
+func (c *Context) GetAttribute(signer crypto.Signer, attribute AttributeType) (a *Attribute, err error) {
 	set, err := c.GetAttributes(signer, []AttributeType{attribute})
 	if err != nil {
 		return nil, err
