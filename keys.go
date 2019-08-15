@@ -376,25 +376,7 @@ func (c *Context) FindAllKeys() ([]*SecretKey, error) {
 
 func uintPtr(i uint) *uint { return &i }
 
-// GetAttributes gets the values of the specified attributes on the given key
-func (c *Context) GetAttributes(signer crypto.Signer, attributes []AttributeType) (a AttributeSet, err error) {
-	if c.closed.Get() {
-		return nil, errClosed
-	}
-
-	var handle pkcs11.ObjectHandle
-
-	switch s := (signer).(type) {
-	case *pkcs11PrivateKeyDSA:
-		handle = s.handle
-	case *pkcs11PrivateKeyRSA:
-		handle = s.handle
-	case *pkcs11PrivateKeyECDSA:
-		handle = s.handle
-	default:
-		return nil, errors.Errorf("not a PKCS#11 key")
-	}
-
+func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []AttributeType) (a AttributeSet, err error) {
 	values := NewAttributeSet()
 
 	err = c.withSession(func(session *pkcs11Session) error {
@@ -418,9 +400,67 @@ func (c *Context) GetAttributes(signer crypto.Signer, attributes []AttributeType
 	return values, err
 }
 
-// GetAttributes gets the value of the specified attribute on the given key
-func (c *Context) GetAttribute(signer crypto.Signer, attribute AttributeType) (a *Attribute, err error) {
-	set, err := c.GetAttributes(signer, []AttributeType{attribute})
+// GetAttributes gets the values of the specified attributes on the given key
+// If the key is asymmetric, then the attributes are retrieved from the private half
+func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	var handle pkcs11.ObjectHandle
+
+	switch k := (key).(type) {
+	case *pkcs11PrivateKeyDSA:
+		handle = k.handle
+	case *pkcs11PrivateKeyRSA:
+		handle = k.handle
+	case *pkcs11PrivateKeyECDSA:
+		handle = k.handle
+	case *SecretKey:
+		handle = k.handle
+	default:
+		return nil, errors.Errorf("not a PKCS#11 key")
+	}
+
+	return c.getAttributes(handle, attributes)
+}
+
+// GetAttribute gets the value of the specified attribute on the given key
+// If the key is asymmetric, then the attribute is retrieved from the private half
+func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+	set, err := c.GetAttributes(key, []AttributeType{attribute})
+	if err != nil {
+		return nil, err
+	}
+
+	return set[attribute], nil
+}
+
+// GetPubAttributes gets the values of the specified attributes on the public half of the given key
+func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	var handle pkcs11.ObjectHandle
+
+	switch k := (key).(type) {
+	case *pkcs11PrivateKeyDSA:
+		handle = k.pubKeyHandle
+	case *pkcs11PrivateKeyRSA:
+		handle = k.pubKeyHandle
+	case *pkcs11PrivateKeyECDSA:
+		handle = k.pubKeyHandle
+	default:
+		return nil, errors.Errorf("not an asymmetric PKCS#11 key")
+	}
+
+	return c.getAttributes(handle, attributes)
+}
+
+// GetPubAttribute gets the value of the specified attribute on the public half of the given key
+func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+	set, err := c.GetPubAttributes(key, []AttributeType{attribute})
 	if err != nil {
 		return nil, err
 	}
