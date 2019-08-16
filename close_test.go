@@ -56,6 +56,12 @@ func TestClose(t *testing.T) {
 		require.NoError(t, err)
 
 		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
+
+		if i == 4 {
+			err = key2.Delete()
+			require.NoError(t, err)
+		}
+		
 		require.NoError(t, ctx.Close())
 	}
 }

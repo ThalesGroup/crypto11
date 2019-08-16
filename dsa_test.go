@@ -117,6 +117,8 @@ func TestHardDSA(t *testing.T) {
 		key, err := ctx.GenerateDSAKeyPairWithLabel(id, label, params)
 		require.NoError(t, err)
 		require.NotNil(t, key)
+		defer key.Delete()
+
 		testDsaSigning(t, key, pSize, "hard1")
 
 		key2, err := ctx.FindKeyPair(id, nil)

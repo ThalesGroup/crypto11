@@ -74,6 +74,7 @@ func TestHardECDSA(t *testing.T) {
 		key, err := ctx.GenerateECDSAKeyPairWithLabel(id, label, curve)
 		require.NoError(t, err)
 		require.NotNil(t, key)
+		defer key.Delete()
 
 		testEcdsaSigning(t, key, crypto.SHA1)
 		testEcdsaSigning(t, key, crypto.SHA224)

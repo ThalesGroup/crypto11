@@ -51,6 +51,7 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	key, err := ctx.GenerateSecretKey(id, bits, Ciphers[keytype])
 	require.NoError(t, err)
 	require.NotNil(t, key)
+	defer key.Delete()
 
 	var key2 *SecretKey
 	t.Run("Find", func(t *testing.T) {
@@ -245,6 +246,8 @@ func BenchmarkCBC(b *testing.B) {
 	id := randomBytes()
 	key, err := ctx.GenerateSecretKey(id, 128, Ciphers[pkcs11.CKK_AES])
 	require.NoError(b, err)
+	require.NotNil(b, key)
+	defer key.Delete()
 
 	iv := make([]byte, 16)
 	plaintext := make([]byte, 65536)
