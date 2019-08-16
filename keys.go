@@ -98,16 +98,18 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (signer Signer, err error) {
 	attributes := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
+		pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
 	}
 	if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
 		return nil, err
 	}
 	id := attributes[0].Value
-	keyType := bytesToUlong(attributes[1].Value)
+	label := attributes[1].Value
+	keyType := bytesToUlong(attributes[2].Value)
 
 	// Find the public half which has a matching CKA_ID
-	pubHandle, err := findKey(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+	pubHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 	if err != nil {
 		return nil, err
 	}
