@@ -460,12 +460,7 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 			return err
 		}
 
-		for _, a := range p11values {
-			err = values.Set(a.Type, a.Value)
-			if err != nil {
-				return err
-			}
-		}
+		values.AddIfNotPresent(p11values)
 
 		return nil
 	})
