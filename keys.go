@@ -273,7 +273,7 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []
 	err = c.withSession(func(session *pkcs11Session) error {
 		// Add the private key class to the template to find the private half
 		privAttributes := attributes.Copy()
-		err = attributes.Set(CkaClass, pkcs11.CKO_PRIVATE_KEY)
+		err = privAttributes.Set(CkaClass, pkcs11.CKO_PRIVATE_KEY)
 		if err != nil {
 			return err
 		}
@@ -402,7 +402,7 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 	err := c.withSession(func(session *pkcs11Session) error {
 		// Add the private key class to the template to find the private half
 		privAttributes := attributes.Copy()
-		err := attributes.Set(CkaClass, pkcs11.CKO_SECRET_KEY)
+		err := privAttributes.Set(CkaClass, pkcs11.CKO_SECRET_KEY)
 		if err != nil {
 			return err
 		}
