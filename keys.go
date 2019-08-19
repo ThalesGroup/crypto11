@@ -93,8 +93,8 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 	return &handles[0], nil
 }
 
-// Takes a handles to the private half of a keypair, locates the public half with the matching CKA_ID
-// value and constructs a keypair object from them both.
+// Takes a handles to the private half of a keypair, locates the public half with the matching CKA_ID and CKA_LABEL
+// values and constructs a keypair object from them both.
 func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (signer Signer, err error) {
 	attributes := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
@@ -169,8 +169,9 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 
 // FindKeyPair retrieves a previously created asymmetric key pair, or nil if it cannot be found.
 //
-// At least one of id and label must be specified. If the private key is found, but the public key is
-// not, an error is returned because we cannot implement crypto.Signer without the public key.
+// At least one of id and label must be specified.
+// If the private key is found, but the public key is not, the key is not returned because we cannot
+// implement crypto.Signer without the public key.
 func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 	result, err := c.FindKeyPairs(id, label)
 	if err != nil {
@@ -206,6 +207,12 @@ func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
 	return c.FindKeyPairsWithAttributes(attributes)
 }
 
+// FindKeyPairWithAttributes retrieves a previously created asymmetric key pair, or nil if it cannot be found.
+// The given attributes are matched against the private half only. Then the public half with a matching CKA_ID
+// and CKA_LABEL values is found.
+//
+// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
+// implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, error) {
 	result, err := c.FindKeyPairsWithAttributes(attributes)
 	if err != nil {
@@ -221,10 +228,10 @@ func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, er
 
 // FindKeyPairsWithAttributes retrieves previously created asymmetric key pairs, or nil if none can be found.
 // The given attributes are matched against the private half only. Then the public half with a matching CKA_ID
-// value is found.
+// and CKA_LABEL values is found.
 //
 // If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
-//// implement crypto.Signer without the public key.
+// implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) ([]Signer, error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -314,6 +321,7 @@ func (c *Context) FindKeys(id []byte, label []byte) ([]*SecretKey, error) {
 	return c.FindKeysWithAttributes(attributes)
 }
 
+// FindKeyWithAttributes retrieves a previously created symmetric key, or nil if it cannot be found.
 func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, error) {
 	result, err := c.FindKeysWithAttributes(attributes)
 	if err != nil {
@@ -327,6 +335,7 @@ func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, er
 	return result[0], nil
 }
 
+// FindKeysWithAttributes retrieves previously created symmetric keys, or a nil slice if none can be found.
 func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey, error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -402,8 +411,10 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 	return values, err
 }
 
-// GetAttributes gets the values of the specified attributes on the given key
-// If the key is asymmetric, then the attributes are retrieved from the private half
+// GetAttributes gets the values of the specified attributes on the given key or keypair.
+// If the key is asymmetric, then the attributes are retrieved from the private half.
+//
+// If the object is not a crypto11 key or keypair then an error is returned.
 func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -427,8 +438,10 @@ func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a 
 	return c.getAttributes(handle, attributes)
 }
 
-// GetAttribute gets the value of the specified attribute on the given key
-// If the key is asymmetric, then the attribute is retrieved from the private half
+// GetAttribute gets the value of the specified attribute on the given key or keypair.
+// If the key is asymmetric, then the attribute is retrieved from the private half.
+//
+// If the object is not a crypto11 key or keypair then an error is returned.
 func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
 	set, err := c.GetAttributes(key, []AttributeType{attribute})
 	if err != nil {
@@ -438,7 +451,9 @@ func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Att
 	return set[attribute], nil
 }
 
-// GetPubAttributes gets the values of the specified attributes on the public half of the given key
+// GetPubAttributes gets the values of the specified attributes on the public half of the given keypair.
+//
+// If the object is not a crypto11 keypair then an error is returned.
 func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) (a AttributeSet, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
@@ -460,7 +475,9 @@ func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) 
 	return c.getAttributes(handle, attributes)
 }
 
-// GetPubAttribute gets the value of the specified attribute on the public half of the given key
+// GetPubAttribute gets the value of the specified attribute on the public half of the given key.
+//
+// If the object is not a crypto11 keypair then an error is returned.
 func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
 	set, err := c.GetPubAttributes(key, []AttributeType{attribute})
 	if err != nil {
