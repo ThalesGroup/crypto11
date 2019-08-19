@@ -89,7 +89,19 @@ func TestErrorAfterClosed(t *testing.T) {
 	_, err = ctx.FindKey(bytes, nil)
 	assert.Equal(t, errClosed, err)
 
+	_, err = ctx.FindKeys(bytes, nil)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.FindKeysWithAttributes(NewAttributeSet())
+	assert.Equal(t, errClosed, err)
+
 	_, err = ctx.FindKeyPair(bytes, nil)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.FindKeyPairs(bytes, nil)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.FindKeyPairsWithAttributes(NewAttributeSet())
 	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GenerateSecretKey(bytes, 256, CipherAES)
@@ -128,5 +140,17 @@ func TestErrorAfterClosed(t *testing.T) {
 	assert.Equal(t, errClosed, err)
 
 	err = ctx.ImportCertificateWithAttributes(NewAttributeSet(), cert)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GetAttribute(nil, CkaLabel)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GetAttributes(nil, []AttributeType{CkaLabel})
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GetPubAttribute(nil, CkaLabel)
+	assert.Equal(t, errClosed, err)
+
+	_, err = ctx.GetPubAttributes(nil, []AttributeType{CkaLabel})
 	assert.Equal(t, errClosed, err)
 }
