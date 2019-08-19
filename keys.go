@@ -179,6 +179,10 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 // If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
 // because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	result, err := c.FindKeyPairs(id, label)
 	if err != nil {
 		return nil, err
@@ -198,6 +202,10 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 // If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
 // because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairs(id []byte, label []byte) (signer []Signer, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	if id == nil && label == nil {
 		return nil, errors.New("id and label cannot both be nil")
 	}
@@ -228,6 +236,10 @@ func (c *Context) FindKeyPairs(id []byte, label []byte) (signer []Signer, err er
 // If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
 // because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	result, err := c.FindKeyPairsWithAttributes(attributes)
 	if err != nil {
 		return nil, err
@@ -291,6 +303,10 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []
 // If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
 // implement crypto.Signer without the public key.
 func (c *Context) FindAllKeyPairs() ([]Signer, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	return c.FindKeyPairsWithAttributes(NewAttributeSet())
 }
 
@@ -307,6 +323,10 @@ func (k pkcs11PrivateKey) Public() crypto.PublicKey {
 //
 // Either (but not both) of id and label may be nil, in which case they are ignored.
 func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	result, err := c.FindKeys(id, label)
 	if err != nil {
 		return nil, err
@@ -323,6 +343,10 @@ func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
 //
 // At least one of id and label must be specified.
 func (c *Context) FindKeys(id []byte, label []byte) (key []*SecretKey, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	if id == nil && label == nil {
 		return nil, errors.New("id and label cannot both be nil")
 	}
@@ -347,6 +371,10 @@ func (c *Context) FindKeys(id []byte, label []byte) (key []*SecretKey, err error
 
 // FindKeyWithAttributes retrieves a previously created symmetric key, or nil if it cannot be found.
 func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	result, err := c.FindKeysWithAttributes(attributes)
 	if err != nil {
 		return nil, err
@@ -409,6 +437,10 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 
 // FindAllKeyPairs retrieves all existing symmetric keys, or a nil slice if none can be found.
 func (c *Context) FindAllKeys() ([]*SecretKey, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	return c.FindKeysWithAttributes(NewAttributeSet())
 }
 
@@ -473,6 +505,10 @@ func (c *Context) GetAttributes(key interface{}, attributes []AttributeType) (a 
 //
 // If the object is not a crypto11 key or keypair then an error is returned.
 func (c *Context) GetAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	set, err := c.GetAttributes(key, []AttributeType{attribute})
 	if err != nil {
 		return nil, err
@@ -509,6 +545,10 @@ func (c *Context) GetPubAttributes(key interface{}, attributes []AttributeType) 
 //
 // If the object is not a crypto11 keypair then an error is returned.
 func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *Attribute, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
 	set, err := c.GetPubAttributes(key, []AttributeType{attribute})
 	if err != nil {
 		return nil, err
