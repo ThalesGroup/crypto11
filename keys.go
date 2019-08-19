@@ -283,7 +283,7 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []
 			return err
 		}
 
-		for _, privHandle := range(privHandles) {
+		for _, privHandle := range privHandles {
 			k, err := c.makeKeyPair(session, &privHandle)
 			if err != nil {
 				continue
@@ -412,7 +412,7 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 			return err
 		}
 
-		for _, privHandle := range(privHandles) {
+		for _, privHandle := range privHandles {
 			attributes := []*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
 			}
@@ -451,7 +451,7 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 
 	err = c.withSession(func(session *pkcs11Session) error {
 		var attrs []*pkcs11.Attribute
-		for _, a := range(attributes) {
+		for _, a := range attributes {
 			attrs = append(attrs, pkcs11.NewAttribute(a, nil))
 		}
 
@@ -460,7 +460,7 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 			return err
 		}
 
-		for _, a := range(p11values) {
+		for _, a := range p11values {
 			err = values.Set(a.Type, a.Value)
 			if err != nil {
 				return err
