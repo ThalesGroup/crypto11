@@ -108,6 +108,11 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 	label := attributes[1].Value
 	keyType := bytesToUlong(attributes[2].Value)
 
+	// Ensure the private key actually has a non-empty CKA_ID to match on
+	if id == nil || len(id) == 0 {
+		return nil, errors.New("private key has no CKA_ID")
+	}
+
 	// Find the public half which has a matching CKA_ID
 	pubHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 	if err != nil {
@@ -170,8 +175,9 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 // FindKeyPair retrieves a previously created asymmetric key pair, or nil if it cannot be found.
 //
 // At least one of id and label must be specified.
-// If the private key is found, but the public key is not, the key is not returned because we cannot
-// implement crypto.Signer without the public key.
+// Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
+// If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
+// because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 	result, err := c.FindKeyPairs(id, label)
 	if err != nil {
@@ -188,8 +194,9 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 // FindKeyPairs retrieves all matching asymmetric key pairs, or a nil slice if none can be found.
 //
 // At least one of id and label must be specified.
-// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
-// implement crypto.Signer without the public key.
+// Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
+// If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
+// because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
 	if id == nil && label == nil {
 		return nil, errors.New("id and label cannot both be nil")
@@ -211,8 +218,9 @@ func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
 // The given attributes are matched against the private half only. Then the public half with a matching CKA_ID
 // and CKA_LABEL values is found.
 //
-// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
-// implement crypto.Signer without the public key.
+// Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
+// If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
+// because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, error) {
 	result, err := c.FindKeyPairsWithAttributes(attributes)
 	if err != nil {
@@ -230,8 +238,9 @@ func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, er
 // The given attributes are matched against the private half only. Then the public half with a matching CKA_ID
 // and CKA_LABEL values is found.
 //
-// If a private key is found, but the corresponding public key is not, the key is not returned because we cannot
-// implement crypto.Signer without the public key.
+// Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
+// If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
+// because we cannot implement crypto.Signer without the public key.
 func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) ([]Signer, error) {
 	if c.closed.Get() {
 		return nil, errClosed
