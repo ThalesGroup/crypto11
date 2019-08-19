@@ -3,7 +3,6 @@ package crypto11
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"github.com/miekg/pkcs11"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,17 +70,15 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		attrs.AddIfNotPresent([]*Attribute{
-			pkcs11.NewAttribute(CkaValueLen, 16),
-		})
+		err = attrs.Set(CkaValueLen, 16)
+		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		attrs.AddIfNotPresent([]*Attribute{
-			pkcs11.NewAttribute(CkaValueLen, 32),
-		})
+		err = attrs.Set(CkaValueLen, 32)
+		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
 		require.Len(t, keys, 1)
@@ -121,9 +118,8 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		attrs.AddIfNotPresent([]*Attribute{
-			pkcs11.NewAttribute(CkaPublicExponent, []byte{1, 0, 1}),
-		})
+		err = attrs.Set(CkaPublicExponent, []byte{1, 0, 1})
+		require.NoError(t, err)
 
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
 		require.Len(t, keys, 3)
