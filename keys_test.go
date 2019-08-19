@@ -44,17 +44,14 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		key, err = ctx.GenerateSecretKey(id2, 128, CipherAES)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		key, err = ctx.GenerateSecretKey(id2, 256, CipherAES)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		attrs, err := NewAttributeSetWithID(id)
@@ -92,17 +89,14 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateRSAKeyPair(id, 1024)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		key, err = ctx.GenerateRSAKeyPair(id2, 1024)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		key, err = ctx.GenerateRSAKeyPair(id2, 2048)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		attrs, err := NewAttributeSetWithID(id)
@@ -132,7 +126,6 @@ func TestFindingAllKeys(t *testing.T) {
 			id := randomBytes()
 			key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 			require.NoError(t, err)
-			require.NotNil(t, key)
 
 			defer key.Delete()
 		}
@@ -151,7 +144,6 @@ func TestFindingAllKeyPairs(t *testing.T) {
 			id := randomBytes()
 			key, err := ctx.GenerateRSAKeyPair(id, 1024)
 			require.NoError(t, err)
-			require.NotNil(t, key)
 
 			defer key.Delete()
 		}
@@ -170,7 +162,6 @@ func TestGettingPrivateKeyAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateRSAKeyPair(id, 1024)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaModulus})
@@ -188,7 +179,6 @@ func TestGettingPublicKeyAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateRSAKeyPair(id, 1024)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		attrs, err := ctx.GetPubAttributes(key, []AttributeType{CkaModulusBits})
@@ -206,7 +196,6 @@ func TestGettingSecretKeyAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 		require.NoError(t, err)
-		require.NotNil(t, key)
 		defer key.Delete()
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaValueLen})
