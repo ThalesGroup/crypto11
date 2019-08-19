@@ -197,7 +197,7 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 // Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
 // If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
 // because we cannot implement crypto.Signer without the public key.
-func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
+func (c *Context) FindKeyPairs(id []byte, label []byte) (signer []Signer, err error) {
 	if id == nil && label == nil {
 		return nil, errors.New("id and label cannot both be nil")
 	}
@@ -205,10 +205,16 @@ func (c *Context) FindKeyPairs(id []byte, label []byte) ([]Signer, error) {
 	attributes := NewAttributeSet()
 
 	if id != nil {
-		attributes[CkaId] = pkcs11.NewAttribute(CkaId, id)
+		err = attributes.Set(CkaId, id)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if label != nil {
-		attributes[CkaLabel] = pkcs11.NewAttribute(CkaLabel, label)
+		err = attributes.Set(CkaLabel, label)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.FindKeyPairsWithAttributes(attributes)
@@ -241,7 +247,7 @@ func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, er
 // Only private keys that have a non-empty CKA_ID will be found, as this is required to locate the matching public key.
 // If the private key is found, but the public key with a corresponding CKA_ID is not, the key is not returned
 // because we cannot implement crypto.Signer without the public key.
-func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) ([]Signer, error) {
+func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []Signer, err error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
@@ -252,10 +258,13 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) ([]Signer,
 		return nil, errors.Errorf("keypair attribute set must not contain CkaClass")
 	}
 
-	err := c.withSession(func(session *pkcs11Session) error {
+	err = c.withSession(func(session *pkcs11Session) error {
 		// Add the private key class to the template to find the private half
 		privAttributes := attributes.Copy()
-		privAttributes[CkaClass] = pkcs11.NewAttribute(CkaClass, pkcs11.CKO_PRIVATE_KEY)
+		err = attributes.Set(CkaClass, pkcs11.CKO_PRIVATE_KEY)
+		if err != nil {
+			return err
+		}
 
 		privHandles, err := findKeysWithAttributes(session, privAttributes.ToSlice())
 		if err != nil {
@@ -313,7 +322,7 @@ func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
 // FindKeys retrieves all matching symmetric keys, or a nil slice if none can be found.
 //
 // At least one of id and label must be specified.
-func (c *Context) FindKeys(id []byte, label []byte) ([]*SecretKey, error) {
+func (c *Context) FindKeys(id []byte, label []byte) (key []*SecretKey, err error) {
 	if id == nil && label == nil {
 		return nil, errors.New("id and label cannot both be nil")
 	}
@@ -321,10 +330,16 @@ func (c *Context) FindKeys(id []byte, label []byte) ([]*SecretKey, error) {
 	attributes := NewAttributeSet()
 
 	if id != nil {
-		attributes[CkaId] = pkcs11.NewAttribute(CkaId, id)
+		err = attributes.Set(CkaId, id)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if label != nil {
-		attributes[CkaLabel] = pkcs11.NewAttribute(CkaLabel, label)
+		err = attributes.Set(CkaLabel, label)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.FindKeysWithAttributes(attributes)
@@ -359,7 +374,10 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 	err := c.withSession(func(session *pkcs11Session) error {
 		// Add the private key class to the template to find the private half
 		privAttributes := attributes.Copy()
-		privAttributes[CkaClass] = pkcs11.NewAttribute(CkaClass, pkcs11.CKO_SECRET_KEY)
+		err := attributes.Set(CkaClass, pkcs11.CKO_SECRET_KEY)
+		if err != nil {
+			return err
+		}
 
 		privHandles, err := findKeysWithAttributes(session, privAttributes.ToSlice())
 		if err != nil {
@@ -411,7 +429,10 @@ func (c *Context) getAttributes(handle pkcs11.ObjectHandle, attributes []Attribu
 		}
 
 		for _, a := range(p11values) {
-			values[a.Type] = pkcs11.NewAttribute(a.Type, a.Value)
+			err = values.Set(a.Type, a.Value)
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
