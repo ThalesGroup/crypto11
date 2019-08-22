@@ -29,6 +29,12 @@ import (
 
 const maxHandlePerFind = 20
 
+// errNoCkaId is returned if a private key is found which has no CKA_ID attribute
+var errNoCkaId = errors.New("private key has no CKA_ID")
+
+// errNoPublicHalf is returned if a public half cannot be found to match a given private key
+var errNoPublicHalf = errors.New("could not find public key to match private key")
+
 func findKeysWithAttributes(session *pkcs11Session, template []*pkcs11.Attribute) (handles []pkcs11.ObjectHandle, err error) {
 	if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
 		return nil, err
@@ -113,7 +119,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 
 	// Ensure the private key actually has a non-empty CKA_ID to match on
 	if id == nil || len(id) == 0 {
-		return nil, errors.New("private key has no CKA_ID")
+		return nil, errNoCkaId
 	}
 
 	// Find the public half which has a matching CKA_ID
@@ -123,7 +129,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 	}
 	if pubHandle == nil {
 		// We can't return a Signer if we don't have private and public key. Treat it as an error.
-		return nil, errors.New("could not find public key to match private key")
+		return nil, errNoPublicHalf
 	}
 
 	var pub crypto.PublicKey
@@ -288,8 +294,12 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []
 
 		for _, privHandle := range privHandles {
 			k, err := c.makeKeyPair(session, &privHandle)
-			if err != nil {
+
+			if err == errNoCkaId || err == errNoPublicHalf {
 				continue
+			}
+			if err != nil {
+				return err
 			}
 
 			keys = append(keys, k)
