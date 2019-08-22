@@ -78,6 +78,7 @@ func TestHardRSA(t *testing.T) {
 			key, err := ctx.GenerateRSAKeyPairWithLabel(id, label, nbits)
 			require.NoError(t, err)
 			require.NotNil(t, key)
+			defer key.Delete()
 
 			var key2, key3 crypto.PrivateKey
 
