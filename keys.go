@@ -86,6 +86,9 @@ func findKeys(session *pkcs11Session, id []byte, label []byte, keyclass *uint, k
 // callers will call it twice. Returns nil if the key does not exist on the token.
 func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, keytype *uint) (obj *pkcs11.ObjectHandle, err error) {
 	handles, err := findKeys(session, id, label, keyclass, keytype)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(handles) == 0 {
 		return nil, nil
