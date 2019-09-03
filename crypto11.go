@@ -97,11 +97,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vitessio/vitess/go/sync2"
-
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
-	"github.com/vitessio/vitess/go/pools"
+	"github.com/thales-e-security/pool"
 )
 
 const (
@@ -164,14 +162,14 @@ func (k *pkcs11PrivateKey) Delete() error {
 // All functions, except Close, are safe to call from multiple goroutines.
 type Context struct {
 	// Atomic fields must be at top (according to the package owners)
-	closed sync2.AtomicBool
+	closed pool.AtomicBool
 
 	ctx *pkcs11.Ctx
 	cfg *Config
 
 	token *pkcs11.TokenInfo
 	slot  uint
-	pool  *pools.ResourcePool
+	pool  *pool.ResourcePool
 
 	// persistentSession is a session held open so we can be confident handles and login status
 	// persist for the duration of this context
@@ -317,7 +315,7 @@ func Configure(config *Config) (*Context, error) {
 	}
 
 	// We will use one session to keep state alive, so the pool gets maxSessions - 1
-	instance.pool = pools.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0)
+	instance.pool = pool.NewResourcePool(instance.resourcePoolFactoryFunc, maxSessions-1, maxSessions-1, 0, 0)
 
 	// Create a long-term session and log it in (if supported). This session won't be used by callers, instead it is
 	// used to keep a connection alive to the token to ensure object handles and the log in status remain accessible.
