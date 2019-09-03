@@ -153,4 +153,3 @@ discuss.
 Here are some topics we'd like to cover:
 
 * Full test instructions for additional PKCS#11 implementations.
-* Move to another resource pool implementation (`github.com/vitessio/vitess` is a big dependency)
