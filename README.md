@@ -60,6 +60,15 @@ A minimal configuration file looks like this:
 Testing Guidance
 ================
 
+Disabling tests
+---------------
+
+To disable specific tests, set the environment variable `CRYPTO11_SKIP=<flags>` where `<flags>` is a comma-separated
+list of the following options:
+
+*  `CERTS` - disables certificate-related tests. Needed for AWS CloudHSM, which doesn't support certificates. 
+
+
 Testing with SoftHSM2
 ---------------------
 
