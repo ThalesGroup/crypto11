@@ -42,9 +42,11 @@ func TestClose(t *testing.T) {
 
 	const pSize = dsa.L1024N160
 	id := randomBytes()
-	key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
-	require.NoError(t, err)
-	require.NotNil(t, key)
+	_, err = ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
+	if err != nil {
+		_ = ctx.Close()
+		t.Fatal(err)
+	}
 
 	require.NoError(t, ctx.Close())
 
@@ -61,7 +63,7 @@ func TestClose(t *testing.T) {
 			err = key2.Delete()
 			require.NoError(t, err)
 		}
-		
+
 		require.NoError(t, ctx.Close())
 	}
 }
