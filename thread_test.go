@@ -44,7 +44,7 @@ func TestThreadedRSA(t *testing.T) {
 	id := randomBytes()
 	key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 	require.NoError(t, err)
-	defer func() { _ = key.Delete() }()
+	defer func(k Signer) { _ = k.Delete() }(key)
 
 	done := make(chan int)
 	started := time.Now()

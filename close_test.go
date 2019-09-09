@@ -24,7 +24,6 @@ package crypto11
 import (
 	"crypto/dsa"
 	"crypto/elliptic"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -40,9 +39,8 @@ func TestClose(t *testing.T) {
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
-	const pSize = dsa.L1024N160
 	id := randomBytes()
-	_, err = ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
+	_, err = ctx.GenerateRSAKeyPair(id, rsaSize)
 	if err != nil {
 		_ = ctx.Close()
 		t.Fatal(err)
@@ -57,8 +55,7 @@ func TestClose(t *testing.T) {
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)
 
-		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
-
+		testRsaSigning(t, key2, false)
 		if i == 4 {
 			err = key2.Delete()
 			require.NoError(t, err)
