@@ -101,6 +101,8 @@ func TestNativeDSA(t *testing.T) {
 }
 
 func TestHardDSA(t *testing.T) {
+	skipTest(t, skipTestDSA)
+
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 

@@ -69,6 +69,7 @@ list of the following options:
 *  `CERTS` - disables certificate-related tests. Needed for AWS CloudHSM, which doesn't support certificates.
 *  `OAEP_LABEL` - disables RSA OAEP encryption tests that use source data encoding parameter (also known as a 'label' 
 in some crypto libraries). Needed for AWS CloudHSM.
+*  `DSA` - disables DSA tests. Needed for AWS CloudHSM (and any other tokens not supporting DSA).
 
 
 Testing with SoftHSM2
