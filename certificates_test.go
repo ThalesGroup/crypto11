@@ -28,30 +28,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"math/big"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-const skipTestEnv = "CRYPTO11_SKIP"
-
-const skipTestCert = "CERTS"
-
-// skipTest tests whether the CRYPTO11_SKIP environment variable contains
-// flagName. If so, it skips the test.
-func skipTest(t *testing.T, flagName string) {
-	thingsToSkip := strings.Split(os.Getenv(skipTestEnv), ",")
-	for _, s := range thingsToSkip {
-		if s == flagName {
-			t.Logf("Skipping test due to %s flag", flagName)
-			t.SkipNow()
-		}
-	}
-}
 
 func TestCertificate(t *testing.T) {
 	skipTest(t, skipTestCert)

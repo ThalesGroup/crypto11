@@ -29,14 +29,14 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"fmt"
 	"testing"
 
 	"github.com/miekg/pkcs11"
 	"github.com/stretchr/testify/require"
 )
 
-var rsaSizes = []int{2048}
+// Set to 2048, as most tokens will support this. 1024 not supported by some tokens (e.g. Amazon CloudHSM).
+const rsaSize = 2048
 
 func TestNativeRSA(t *testing.T) {
 
@@ -47,66 +47,55 @@ func TestNativeRSA(t *testing.T) {
 		require.NoError(t, ctx.Close())
 	}()
 
-	for _, nbits := range rsaSizes {
-		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
-			key, err := rsa.GenerateKey(rand.Reader, nbits)
-			require.NoError(t, err)
+	key, err := rsa.GenerateKey(rand.Reader, rsaSize)
+	require.NoError(t, err)
 
-			err = key.Validate()
-			require.NoError(t, err)
+	err = key.Validate()
+	require.NoError(t, err)
 
-			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, true) })
-			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, true) })
-		})
-	}
+	t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, rsaSize, true) })
+	t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, rsaSize, true) })
 }
 
 func TestHardRSA(t *testing.T) {
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
-
 	defer func() {
 		require.NoError(t, ctx.Close())
 	}()
 
-	for _, nbits := range rsaSizes {
+	id := randomBytes()
+	label := randomBytes()
 
-		id := randomBytes()
-		label := randomBytes()
+	key, err := ctx.GenerateRSAKeyPairWithLabel(id, label, rsaSize)
+	require.NoError(t, err)
+	require.NotNil(t, key)
+	defer key.Delete()
 
-		t.Run(fmt.Sprintf("%v", nbits), func(t *testing.T) {
+	var key2, key3 crypto.PrivateKey
 
-			key, err := ctx.GenerateRSAKeyPairWithLabel(id, label, nbits)
-			require.NoError(t, err)
-			require.NotNil(t, key)
-			defer key.Delete()
-
-			var key2, key3 crypto.PrivateKey
-
-			t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, nbits, false) })
-			t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, nbits, false) })
-			t.Run("FindId", func(t *testing.T) {
-				key2, err = ctx.FindKeyPair(id, nil)
-				require.NoError(t, err)
-			})
-			t.Run("SignId", func(t *testing.T) {
-				if key2 == nil {
-					t.SkipNow()
-				}
-				testRsaSigning(t, key2.(*pkcs11PrivateKeyRSA), nbits, false)
-			})
-			t.Run("FindLabel", func(t *testing.T) {
-				key3, err = ctx.FindKeyPair(nil, label)
-				require.NoError(t, err)
-			})
-			t.Run("SignLabel", func(t *testing.T) {
-				if key3 == nil {
-					t.SkipNow()
-				}
-				testRsaSigning(t, key3.(crypto.Signer), nbits, false)
-			})
-		})
-	}
+	t.Run("Sign", func(t *testing.T) { testRsaSigning(t, key, rsaSize, false) })
+	t.Run("Encrypt", func(t *testing.T) { testRsaEncryption(t, key, rsaSize, false) })
+	t.Run("FindId", func(t *testing.T) {
+		key2, err = ctx.FindKeyPair(id, nil)
+		require.NoError(t, err)
+	})
+	t.Run("SignId", func(t *testing.T) {
+		if key2 == nil {
+			t.SkipNow()
+		}
+		testRsaSigning(t, key2.(*pkcs11PrivateKeyRSA), rsaSize, false)
+	})
+	t.Run("FindLabel", func(t *testing.T) {
+		key3, err = ctx.FindKeyPair(nil, label)
+		require.NoError(t, err)
+	})
+	t.Run("SignLabel", func(t *testing.T) {
+		if key3 == nil {
+			t.SkipNow()
+		}
+		testRsaSigning(t, key3.(crypto.Signer), rsaSize, false)
+	})
 }
 
 func testRsaSigning(t *testing.T, key crypto.Signer, nbits int, native bool) {
@@ -181,19 +170,22 @@ func testRsaEncryption(t *testing.T, key crypto.Decrypter, nbits int, native boo
 			t.Skipf("key too small for SHA512")
 		}
 	})
-	t.Run("OAEPSHA1Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{1, 2, 3, 4}, native) })
-	t.Run("OAEPSHA224Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{5, 6, 7, 8}, native) })
-	t.Run("OAEPSHA256Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{9}, native) })
-	t.Run("OAEPSHA384Label", func(t *testing.T) {
-		testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{10, 11, 12, 13, 14, 15}, native)
-	})
-	t.Run("OAEPSHA512Label", func(t *testing.T) {
-		if nbits > 1024 {
-			testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{16, 17, 18}, native)
-		} else {
-			t.Skipf("key too small for SHA512")
-		}
-	})
+
+	if !shouldSkipTest(skipTestOAEPLabel) {
+		t.Run("OAEPSHA1Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA1, []byte{1, 2, 3, 4}, native) })
+		t.Run("OAEPSHA224Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA224, []byte{5, 6, 7, 8}, native) })
+		t.Run("OAEPSHA256Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA256, []byte{9}, native) })
+		t.Run("OAEPSHA384Label", func(t *testing.T) {
+			testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{10, 11, 12, 13, 14, 15}, native)
+		})
+		t.Run("OAEPSHA512Label", func(t *testing.T) {
+			if nbits > 1024 {
+				testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{16, 17, 18}, native)
+			} else {
+				t.Skipf("key too small for SHA512")
+			}
+		})
+	}
 }
 
 func testRsaEncryptionPKCS1v15(t *testing.T, key crypto.Decrypter) {
