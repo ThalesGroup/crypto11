@@ -48,21 +48,15 @@ func TestClose(t *testing.T) {
 
 	require.NoError(t, ctx.Close())
 
-	for i := 0; i < 5; i++ {
-		ctx, err := ConfigureFromFile("config")
-		require.NoError(t, err)
+	ctx, err = ConfigureFromFile("config")
+	require.NoError(t, err)
 
-		key2, err := ctx.FindKeyPair(id, nil)
-		require.NoError(t, err)
+	key2, err := ctx.FindKeyPair(id, nil)
+	require.NoError(t, err)
 
-		testRsaSigning(t, key2, false)
-		if i == 4 {
-			err = key2.Delete()
-			require.NoError(t, err)
-		}
-
-		require.NoError(t, ctx.Close())
-	}
+	testRsaSigning(t, key2, false)
+	_ = key2.Delete()
+	require.NoError(t, ctx.Close())
 }
 
 // randomBytes returns 32 random bytes.
