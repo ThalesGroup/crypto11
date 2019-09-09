@@ -36,7 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var rsaSizes = []int{1024, 2048}
+var rsaSizes = []int{2048}
 
 func TestNativeRSA(t *testing.T) {
 
@@ -70,6 +70,7 @@ func TestHardRSA(t *testing.T) {
 	}()
 
 	for _, nbits := range rsaSizes {
+
 		id := randomBytes()
 		label := randomBytes()
 
