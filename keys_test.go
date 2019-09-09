@@ -44,15 +44,15 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		key, err = ctx.GenerateSecretKey(id2, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		key, err = ctx.GenerateSecretKey(id2, 256, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		attrs, err := NewAttributeSetWithID(id)
 		require.NoError(t, err)
@@ -87,17 +87,17 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 		id := randomBytes()
 		id2 := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
-		key, err = ctx.GenerateRSAKeyPair(id2, 1024)
+		key, err = ctx.GenerateRSAKeyPair(id2, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
-		key, err = ctx.GenerateRSAKeyPair(id2, 2048)
+		key, err = ctx.GenerateRSAKeyPair(id2, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		attrs, err := NewAttributeSetWithID(id)
 		require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestFindingAllKeys(t *testing.T) {
 			key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 			require.NoError(t, err)
 
-			defer key.Delete()
+			defer func() { _ = key.Delete() }()
 		}
 
 		keys, err := ctx.FindAllKeys()
@@ -142,10 +142,10 @@ func TestFindingAllKeyPairs(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		for i := 1; i <= 5; i++ {
 			id := randomBytes()
-			key, err := ctx.GenerateRSAKeyPair(id, 1024)
+			key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 			require.NoError(t, err)
 
-			defer key.Delete()
+			defer func() { _ = key.Delete() }()
 		}
 
 		keys, err := ctx.FindAllKeyPairs()
@@ -160,9 +160,9 @@ func TestGettingPrivateKeyAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		id := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaModulus})
 		require.NoError(t, err)
@@ -177,16 +177,16 @@ func TestGettingPublicKeyAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		id := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		attrs, err := ctx.GetPubAttributes(key, []AttributeType{CkaModulusBits})
 		require.NoError(t, err)
 		require.NotNil(t, attrs)
 		require.Len(t, attrs, 1)
 
-		require.Equal(t, uint(1024), bytesToUlong(attrs[CkaModulusBits].Value))
+		require.Equal(t, uint(rsaSize), bytesToUlong(attrs[CkaModulusBits].Value))
 	})
 }
 
@@ -196,7 +196,7 @@ func TestGettingSecretKeyAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func() { _ = key.Delete() }()
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaValueLen})
 		require.NoError(t, err)
@@ -209,7 +209,7 @@ func TestGettingSecretKeyAttributes(t *testing.T) {
 
 func TestGettingUnsupportedKeyTypeAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		key, err := rsa.GenerateKey(rand.Reader, 1024)
+		key, err := rsa.GenerateKey(rand.Reader, rsaSize)
 		require.NoError(t, err)
 
 		_, err = ctx.GetAttributes(key, []AttributeType{CkaModulusBits})
