@@ -31,6 +31,8 @@ import (
 	_ "crypto/sha512"
 	"testing"
 
+	"github.com/miekg/pkcs11"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -76,7 +78,7 @@ func TestHardECDSA(t *testing.T) {
 		key, err := ctx.GenerateECDSAKeyPairWithLabel(id, label, curve)
 		require.NoError(t, err)
 		require.NotNil(t, key)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
 		testEcdsaSigning(t, key, crypto.SHA1, curve.Params().Name, "SHA-1")
 		testEcdsaSigning(t, key, crypto.SHA224, curve.Params().Name, "SHA-224")
@@ -103,6 +105,14 @@ func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash,
 	plaintextHash := h.Sum(nil)
 
 	sigDER, err := key.Sign(rand.Reader, plaintextHash, nil)
+
+	p11Err, ok := err.(pkcs11.Error)
+	if ok && p11Err == pkcs11.CKR_KEY_SIZE_RANGE {
+		// Returned by CloudHSM (at least), for key sizes it doesn't support.
+		t.Logf("Skipping unsupported curve %s and hash %s", curveName, hashName)
+		return
+	}
+
 	assert.NoErrorf(t, err, "Sign failed for curve %s and hash %s", curveName, hashName)
 	if err != nil {
 		// We assert and return, so that errors are more informative over a range of curves
