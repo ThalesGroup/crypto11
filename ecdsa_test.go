@@ -31,6 +31,8 @@ import (
 	_ "crypto/sha512"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -50,11 +52,11 @@ func TestNativeECDSA(t *testing.T) {
 			t.Errorf("crypto.ecdsa.GenerateKey: %v", err)
 			return
 		}
-		testEcdsaSigning(t, key, crypto.SHA1)
-		testEcdsaSigning(t, key, crypto.SHA224)
-		testEcdsaSigning(t, key, crypto.SHA256)
-		testEcdsaSigning(t, key, crypto.SHA384)
-		testEcdsaSigning(t, key, crypto.SHA512)
+		testEcdsaSigning(t, key, crypto.SHA1, curve.Params().Name, "SHA-1")
+		testEcdsaSigning(t, key, crypto.SHA224, curve.Params().Name, "SHA-224")
+		testEcdsaSigning(t, key, crypto.SHA256, curve.Params().Name, "SHA-256")
+		testEcdsaSigning(t, key, crypto.SHA384, curve.Params().Name, "SHA-384")
+		testEcdsaSigning(t, key, crypto.SHA512, curve.Params().Name, "SHA-512")
 	}
 }
 
@@ -76,32 +78,37 @@ func TestHardECDSA(t *testing.T) {
 		require.NotNil(t, key)
 		defer key.Delete()
 
-		testEcdsaSigning(t, key, crypto.SHA1)
-		testEcdsaSigning(t, key, crypto.SHA224)
-		testEcdsaSigning(t, key, crypto.SHA256)
-		testEcdsaSigning(t, key, crypto.SHA384)
-		testEcdsaSigning(t, key, crypto.SHA512)
+		testEcdsaSigning(t, key, crypto.SHA1, curve.Params().Name, "SHA-1")
+		testEcdsaSigning(t, key, crypto.SHA224, curve.Params().Name, "SHA-224")
+		testEcdsaSigning(t, key, crypto.SHA256, curve.Params().Name, "SHA-256")
+		testEcdsaSigning(t, key, crypto.SHA384, curve.Params().Name, "SHA-384")
+		testEcdsaSigning(t, key, crypto.SHA512, curve.Params().Name, "SHA-512")
 
 		key2, err := ctx.FindKeyPair(id, nil)
 		require.NoError(t, err)
-		testEcdsaSigning(t, key2.(*pkcs11PrivateKeyECDSA), crypto.SHA256)
+		testEcdsaSigning(t, key2.(*pkcs11PrivateKeyECDSA), crypto.SHA256, curve.Params().Name, "SHA-256")
 
 		key3, err := ctx.FindKeyPair(nil, label)
 		require.NoError(t, err)
-		testEcdsaSigning(t, key3.(crypto.Signer), crypto.SHA384)
+		testEcdsaSigning(t, key3.(crypto.Signer), crypto.SHA384, curve.Params().Name, "SHA-384")
 	}
 }
 
-func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
+func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, curveName, hashName string) {
 
 	plaintext := []byte("sign me with ECDSA")
 	h := hashFunction.New()
 	_, err := h.Write(plaintext)
 	require.NoError(t, err)
-	plaintextHash := h.Sum([]byte{}) // weird API
+	plaintextHash := h.Sum(nil)
 
 	sigDER, err := key.Sign(rand.Reader, plaintextHash, nil)
-	require.NoError(t, err)
+	assert.NoErrorf(t, err, "Sign failed for curve %s and hash %s", curveName, hashName)
+	if err != nil {
+		// We assert and return, so that errors are more informative over a range of curves
+		// and hashes.
+		return
+	}
 
 	var sig dsaSignature
 	err = sig.unmarshalDER(sigDER)
