@@ -294,7 +294,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
-		for _, genMech := range cipher.GenParams {
+		for n, genMech := range cipher.GenParams {
 			template.AddIfNotPresent([]*pkcs11.Attribute{
 				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
 				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
@@ -308,7 +308,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 			})
 
 			if bits > 0 {
-				template.Set(pkcs11.CKA_VALUE_LEN, bits/8)
+				_ = template.Set(pkcs11.CKA_VALUE_LEN, bits/8) // safe for an int
 			}
 
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
@@ -319,8 +319,16 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 				return nil
 			}
 
-			// nShield returns this if if doesn't like the CKK/CKM combination.
-			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_TEMPLATE_INCONSISTENT {
+			if n == len(cipher.GenParams)-1 {
+				// If we have tried all available gen params, we should return a sensible error. So we skip the
+				// retry logic below and return directly.
+				return err
+			}
+
+			// nShield returns CKR_TEMPLATE_INCONSISTENT if if doesn't like the CKK/CKM combination.
+			// AWS CloudHSM returns CKR_ATTRIBUTE_VALUE_INVALID in the same circumstances.
+			if e, ok := err.(pkcs11.Error); ok &&
+				e == pkcs11.CKR_TEMPLATE_INCONSISTENT || e == pkcs11.CKR_ATTRIBUTE_VALUE_INVALID {
 				continue
 			}
 
