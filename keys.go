@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"crypto"
+
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
@@ -122,11 +123,39 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 		return nil, errNoCkaId
 	}
 
+	var pubHandle *pkcs11.ObjectHandle
+
 	// Find the public half which has a matching CKA_ID
-	pubHandle, err := findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+	pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 	if err != nil {
-		return nil, err
+		p11Err, ok := err.(pkcs11.Error)
+
+		if len(label) == 0 && ok && p11Err == pkcs11.CKR_TEMPLATE_INCONSISTENT {
+			// This probably means we are using a token that doesn't like us passing empty attributes in a template.
+			// For instance CloudHSM cannot search for a key with CKA_LABEL="". So if the private key doesn't have a
+			// label, we need to pass nil into findKeys, then match against the first key without a label.
+
+			pubHandles, err := findKeys(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, handle := range pubHandles {
+				template := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil)}
+				template, err = session.ctx.GetAttributeValue(session.handle, handle, template)
+				if err != nil {
+					return nil, err
+				}
+				if len(template[0].Value) == 0 {
+					pubHandle = &handle
+					break
+				}
+			}
+		} else {
+			return nil, err
+		}
 	}
+
 	if pubHandle == nil {
 		// We can't return a Signer if we don't have private and public key. Treat it as an error.
 		return nil, errNoPublicHalf
