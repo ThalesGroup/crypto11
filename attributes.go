@@ -221,6 +221,12 @@ func (a AttributeSet) Copy() AttributeSet {
 	return b
 }
 
+// Unset removes an attribute from the attributes set. If the set does not contain the attribute, this
+// is a no-op.
+func (a AttributeSet) Unset(attributeType AttributeType) {
+	delete(a, attributeType)
+}
+
 // NewAttributeSetWithID is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
 func NewAttributeSetWithID(id []byte) (AttributeSet, error) {
