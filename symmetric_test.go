@@ -130,6 +130,14 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 }
 
 func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher.Block) {
+	// The functions in cipher.Block have no error returns, so they panic if they encounter
+	// a problem. We catch these panics here, so the test can fail nicely
+	defer func() {
+		if cause := recover(); cause != nil {
+			t.Fatalf("Caught panic: %q", cause)
+		}
+	}()
+
 	b := encryptKey.BlockSize()
 	input := make([]byte, 3*b)
 	middle := make([]byte, 3*b)
@@ -179,6 +187,14 @@ func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher
 }
 
 func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.BlockMode) {
+	// The functions in cipher.Block have no error returns, so they panic if they encounter
+	// a problem. We catch these panics here, so the test can fail nicely
+	defer func() {
+		if cause := recover(); cause != nil {
+			t.Fatalf("Caught panic: %q", cause)
+		}
+	}()
+
 	input := make([]byte, 256)
 	middle := make([]byte, 256)
 	output := make([]byte, 256)
