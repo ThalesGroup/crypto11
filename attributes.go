@@ -192,6 +192,19 @@ func (a AttributeSet) Set(attributeType AttributeType, value interface{}) error 
 	return nil
 }
 
+// cloneFrom make this AttributeSet a clone of the supplied set. Values are deep copied.
+func (a AttributeSet) cloneFrom(set AttributeSet) {
+	for key := range a {
+		delete(a, key)
+	}
+
+	// Use Copy to do the deep cloning for us
+	c := set.Copy()
+	for k, v := range c {
+		a[k] = v
+	}
+}
+
 // AddIfNotPresent adds the attributes if the Attribute Type is not already present in the AttributeSet.
 func (a AttributeSet) AddIfNotPresent(additional []*Attribute) {
 	for _, additionalAttr := range additional {

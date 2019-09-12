@@ -295,22 +295,24 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
-		for n, genMech := range cipher.GenParams {
-			template.AddIfNotPresent([]*pkcs11.Attribute{
-				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
-				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
-				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-				pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
-				pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
-				pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt), // Not supported on CloudHSM
-				pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt), // Not supported on CloudHSM
-				pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-			})
 
-			if bits > 0 {
-				_ = template.Set(pkcs11.CKA_VALUE_LEN, bits/8) // safe for an int
-			}
+		template.AddIfNotPresent([]*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt), // Not supported on CloudHSM
+			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt), // Not supported on CloudHSM
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		})
+		if bits > 0 {
+			_ = template.Set(pkcs11.CKA_VALUE_LEN, bits/8) // safe for an int
+		}
+
+		for n, genMech := range cipher.GenParams {
+
+			_ = template.Set(CkaKeyType, genMech.KeyType)
 
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
 
@@ -331,6 +333,9 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 
 				privHandle, err = session.ctx.GenerateKey(session.handle, mech, adjustedTemplate.ToSlice())
 				if err == nil {
+					// Store the actual attributes
+					template.cloneFrom(adjustedTemplate)
+
 					k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 					return nil
 				}
