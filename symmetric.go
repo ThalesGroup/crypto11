@@ -23,6 +23,7 @@ package crypto11
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/miekg/pkcs11"
 )
@@ -324,6 +325,8 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_ARGUMENTS_BAD && genMech.GenMech == pkcs11.CKM_GENERIC_SECRET_KEY_GEN {
 				template.Unset(CkaEncrypt)
 				template.Unset(CkaDecrypt)
+
+				fmt.Println("Adjusted template:\n", template)
 
 				privHandle, err := session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
 				if err == nil {

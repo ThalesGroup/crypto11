@@ -3,6 +3,7 @@ package crypto11
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/miekg/pkcs11"
 )
@@ -13,7 +14,7 @@ type AttributeType = uint
 // Attribute represents a PKCS#11 CK_ATTRIBUTE type.
 type Attribute = pkcs11.Attribute
 
-//noinspection GoUnusedConst
+//noinspection GoUnusedConst,GoDeprecation
 const (
 	CkaClass                  = AttributeType(0x00000000)
 	CkaToken                  = AttributeType(0x00000001)
@@ -227,6 +228,14 @@ func (a AttributeSet) Unset(attributeType AttributeType) {
 	delete(a, attributeType)
 }
 
+func (a AttributeSet) String() string {
+	result := new(strings.Builder)
+	for attr, value := range a {
+		_, _ = fmt.Fprintf(result, "%s: %x\n", attributeTypeString(attr), value.Value)
+	}
+	return result.String()
+}
+
 // NewAttributeSetWithID is a helper function that populates a new slice of Attributes with the provided ID.
 // This function returns an error if the ID is an empty slice.
 func NewAttributeSetWithID(id []byte) (AttributeSet, error) {
@@ -251,4 +260,238 @@ func NewAttributeSetWithIDAndLabel(id, label []byte) (a AttributeSet, err error)
 
 	_ = a.Set(CkaLabel, label) // error not possible with []byte
 	return a, nil
+}
+
+func attributeTypeString(a AttributeType) string {
+	//noinspection GoDeprecation
+	switch a {
+	case CkaClass:
+		return "CkaClass"
+	case CkaToken:
+		return "CkaToken"
+	case CkaPrivate:
+		return "CkaPrivate"
+	case CkaLabel:
+		return "CkaLabel"
+	case CkaApplication:
+		return "CkaApplication"
+	case CkaValue:
+		return "CkaValue"
+	case CkaObjectId:
+		return "CkaObjectId"
+	case CkaCertificateType:
+		return "CkaCertificateType"
+	case CkaIssuer:
+		return "CkaIssuer"
+	case CkaSerialNumber:
+		return "CkaSerialNumber"
+	case CkaAcIssuer:
+		return "CkaAcIssuer"
+	case CkaOwner:
+		return "CkaOwner"
+	case CkaAttrTypes:
+		return "CkaAttrTypes"
+	case CkaTrusted:
+		return "CkaTrusted"
+	case CkaCertificateCategory:
+		return "CkaCertificateCategory"
+	case CkaJavaMIDPSecurityDomain:
+		return "CkaJavaMIDPSecurityDomain"
+	case CkaUrl:
+		return "CkaUrl"
+	case CkaHashOfSubjectPublicKey:
+		return "CkaHashOfSubjectPublicKey"
+	case CkaHashOfIssuerPublicKey:
+		return "CkaHashOfIssuerPublicKey"
+	case CkaNameHashAlgorithm:
+		return "CkaNameHashAlgorithm"
+	case CkaCheckValue:
+		return "CkaCheckValue"
+
+	case CkaKeyType:
+		return "CkaKeyType"
+	case CkaSubject:
+		return "CkaSubject"
+	case CkaId:
+		return "CkaId"
+	case CkaSensitive:
+		return "CkaSensitive"
+	case CkaEncrypt:
+		return "CkaEncrypt"
+	case CkaDecrypt:
+		return "CkaDecrypt"
+	case CkaWrap:
+		return "CkaWrap"
+	case CkaUnwrap:
+		return "CkaUnwrap"
+	case CkaSign:
+		return "CkaSign"
+	case CkaSignRecover:
+		return "CkaSignRecover"
+	case CkaVerify:
+		return "CkaVerify"
+	case CkaVerifyRecover:
+		return "CkaVerifyRecover"
+	case CkaDerive:
+		return "CkaDerive"
+	case CkaStartDate:
+		return "CkaStartDate"
+	case CkaEndDate:
+		return "CkaEndDate"
+	case CkaModulus:
+		return "CkaModulus"
+	case CkaModulusBits:
+		return "CkaModulusBits"
+	case CkaPublicExponent:
+		return "CkaPublicExponent"
+	case CkaPrivateExponent:
+		return "CkaPrivateExponent"
+	case CkaPrime1:
+		return "CkaPrime1"
+	case CkaPrime2:
+		return "CkaPrime2"
+	case CkaExponent1:
+		return "CkaExponent1"
+	case CkaExponent2:
+		return "CkaExponent2"
+	case CkaCoefficient:
+		return "CkaCoefficient"
+	case CkaPublicKeyInfo:
+		return "CkaPublicKeyInfo"
+	case CkaPrime:
+		return "CkaPrime"
+	case CkaSubprime:
+		return "CkaSubprime"
+	case CkaBase:
+		return "CkaBase"
+
+	case CkaPrimeBits:
+		return "CkaPrimeBits"
+	case CkaSubprimeBits:
+		return "CkaSubprimeBits"
+
+	case CkaValueBits:
+		return "CkaValueBits"
+	case CkaValueLen:
+		return "CkaValueLen"
+	case CkaExtractable:
+		return "CkaExtractable"
+	case CkaLocal:
+		return "CkaLocal"
+	case CkaNeverExtractable:
+		return "CkaNeverExtractable"
+	case CkaAlwaysSensitive:
+		return "CkaAlwaysSensitive"
+	case CkaKeyGenMechanism:
+		return "CkaKeyGenMechanism"
+
+	case CkaModifiable:
+		return "CkaModifiable"
+	case CkaCopyable:
+		return "CkaCopyable"
+
+	case CkaDestroyable:
+		return "CkaDestroyable"
+
+	case CkaEcParams:
+		return "CkaEcParams"
+
+	case CkaEcPoint:
+		return "CkaEcPoint"
+
+	case CkaSecondaryAuth:
+		return "CkaSecondaryAuth"
+	case CkaAuthPinFlags:
+		return "CkaAuthPinFlags"
+
+	case CkaAlwaysAuthenticate:
+		return "CkaAlwaysAuthenticate"
+
+	case CkaWrapWithTrusted:
+		return "CkaWrapWithTrusted"
+
+	case ckfArrayAttribute:
+		return "ckfArrayAttribute"
+
+	case CkaWrapTemplate:
+		return "CkaWrapTemplate"
+	case CkaUnwrapTemplate:
+		return "CkaUnwrapTemplate"
+
+	case CkaOtpFormat:
+		return "CkaOtpFormat"
+	case CkaOtpLength:
+		return "CkaOtpLength"
+	case CkaOtpTimeInterval:
+		return "CkaOtpTimeInterval"
+	case CkaOtpUserFriendlyMode:
+		return "CkaOtpUserFriendlyMode"
+	case CkaOtpChallengeRequirement:
+		return "CkaOtpChallengeRequirement"
+	case CkaOtpTimeRequirement:
+		return "CkaOtpTimeRequirement"
+	case CkaOtpCounterRequirement:
+		return "CkaOtpCounterRequirement"
+	case CkaOtpPinRequirement:
+		return "CkaOtpPinRequirement"
+	case CkaOtpCounter:
+		return "CkaOtpCounter"
+	case CkaOtpTime:
+		return "CkaOtpTime"
+	case CkaOtpUserIdentifier:
+		return "CkaOtpUserIdentifier"
+	case CkaOtpServiceIdentifier:
+		return "CkaOtpServiceIdentifier"
+	case CkaOtpServiceLogo:
+		return "CkaOtpServiceLogo"
+	case CkaOtpServiceLogoType:
+		return "CkaOtpServiceLogoType"
+
+	case CkaGOSTR3410Params:
+		return "CkaGOSTR3410Params"
+	case CkaGOSTR3411Params:
+		return "CkaGOSTR3411Params"
+	case CkaGOST28147Params:
+		return "CkaGOST28147Params"
+
+	case CkaHwFeatureType:
+		return "CkaHwFeatureType"
+	case CkaResetOnInit:
+		return "CkaResetOnInit"
+	case CkaHasReset:
+		return "CkaHasReset"
+
+	case CkaPixelX:
+		return "CkaPixelX"
+	case CkaPixelY:
+		return "CkaPixelY"
+	case CkaResolution:
+		return "CkaResolution"
+	case CkaCharRows:
+		return "CkaCharRows"
+	case CkaCharColumns:
+		return "CkaCharColumns"
+	case CkaColor:
+		return "CkaColor"
+	case CkaBitsPerPixel:
+		return "CkaBitsPerPixel"
+	case CkaCharSets:
+		return "CkaCharSets"
+	case CkaEncodingMethods:
+		return "CkaEncodingMethods"
+	case CkaMimeTypes:
+		return "CkaMimeTypes"
+	case CkaMechanismType:
+		return "CkaMechanismType"
+	case CkaRequiredCmsAttributes:
+		return "CkaRequiredCmsAttributes"
+	case CkaDefaultCmsAttributes:
+		return "CkaDefaultCmsAttributes"
+	case CkaSupportedCmsAttributes:
+		return "CkaSupportedCmsAttributes"
+	case CkaAllowedMechanisms:
+		return "CkaAllowedMechanisms"
+	default:
+		return "Unknown"
+	}
 }
