@@ -46,6 +46,9 @@ func TestHardSymmetric(t *testing.T) {
 }
 
 func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
+	for _, p := range Ciphers[keytype].GenParams {
+		skipIfMechUnsupported(t, ctx, p.GenMech)
+	}
 
 	id := randomBytes()
 	key, err := ctx.GenerateSecretKey(id, bits, Ciphers[keytype])
