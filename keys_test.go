@@ -5,6 +5,8 @@ import (
 	"crypto/rsa"
 	"testing"
 
+	"github.com/miekg/pkcs11"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -110,7 +112,7 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		err = attrs.Set(CkaPublicExponent, []byte{1, 0, 1})
+		err = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
 		require.NoError(t, err)
 
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
