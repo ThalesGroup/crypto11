@@ -240,7 +240,7 @@ func skipIfMechUnsupported(t *testing.T, ctx *Context, wantMech uint) {
 			return
 		}
 	}
-	t.Skipf("mechanism %v not supported", wantMech)
+	t.Skipf("mechanism 0x%x not supported", wantMech)
 }
 
 func TestRsaRequiredArgs(t *testing.T) {
