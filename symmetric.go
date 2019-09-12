@@ -328,7 +328,7 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 
 				fmt.Println("Adjusted template:\n", template)
 
-				privHandle, err := session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
+				privHandle, err = session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
 				if err == nil {
 					k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 					return nil
