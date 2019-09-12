@@ -59,10 +59,12 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		attrs := NewAttributeSet()
 		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 
 		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
@@ -70,6 +72,7 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
@@ -77,6 +80,7 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 	})
 }
@@ -105,17 +109,18 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 		attrs := NewAttributeSet()
 		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 
 		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		err = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 3)
 	})
 }

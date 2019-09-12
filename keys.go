@@ -337,7 +337,11 @@ func (c *Context) FindKeyPairsWithAttributes(attributes AttributeSet) (signer []
 		return nil
 	})
 
-	return keys, err
+	if err != nil {
+		return nil, err
+	}
+
+	return keys, nil
 }
 
 // FindAllKeyPairs retrieves all existing asymmetric key pairs, or a nil slice if none can be found.
@@ -474,7 +478,10 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 		return nil
 	})
 
-	return keys, err
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
 
 // FindAllKeyPairs retrieves all existing symmetric keys, or a nil slice if none can be found.
