@@ -323,12 +323,13 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 			// As a special case, AWS CloudHSM does not accept CKA_ENCRYPT and CKA_DECRYPT on a
 			// Generic Secret key. If we are in that special case, try again without those attributes.
 			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_ARGUMENTS_BAD && genMech.GenMech == pkcs11.CKM_GENERIC_SECRET_KEY_GEN {
-				template.Unset(CkaEncrypt)
-				template.Unset(CkaDecrypt)
+				adjustedTemplate := template.Copy()
+				adjustedTemplate.Unset(CkaEncrypt)
+				adjustedTemplate.Unset(CkaDecrypt)
 
-				fmt.Println("Adjusted template:\n", template)
+				fmt.Println("Adjusted template:\n", adjustedTemplate)
 
-				privHandle, err = session.ctx.GenerateKey(session.handle, mech, template.ToSlice())
+				privHandle, err = session.ctx.GenerateKey(session.handle, mech, adjustedTemplate.ToSlice())
 				if err == nil {
 					k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
 					return nil
