@@ -39,30 +39,27 @@ func TestFindKeysRequiresIdOrLabel(t *testing.T) {
 
 func TestFindingKeysWithAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		id := randomBytes()
-		id2 := randomBytes()
+		label := randomBytes()
+		label2 := randomBytes()
 
-		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
+		key, err := ctx.GenerateSecretKeyWithLabel(randomBytes(), label, 128, CipherAES)
 		require.NoError(t, err)
 		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateSecretKey(id2, 128, CipherAES)
+		key, err = ctx.GenerateSecretKeyWithLabel(randomBytes(), label2, 128, CipherAES)
 		require.NoError(t, err)
 		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateSecretKey(id2, 256, CipherAES)
+		key, err = ctx.GenerateSecretKeyWithLabel(randomBytes(), label2, 256, CipherAES)
 		require.NoError(t, err)
 		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		attrs, err := NewAttributeSetWithID(id)
-		require.NoError(t, err)
-
+		attrs := NewAttributeSet()
+		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeysWithAttributes(attrs)
 		require.Len(t, keys, 1)
 
-		attrs, err = NewAttributeSetWithID(id2)
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeysWithAttributes(attrs)
 		require.Len(t, keys, 2)
 
@@ -84,30 +81,31 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 
 func TestFindingKeyPairsWithAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		id := randomBytes()
-		id2 := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
+		// Note: we use common labels, not IDs in this test code. AWS CloudHSM
+		// does not accept two keys with the same ID.
+
+		label := randomBytes()
+		label2 := randomBytes()
+
+		key, err := ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label, rsaSize)
 		require.NoError(t, err)
 		defer func(k Signer) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateRSAKeyPair(id2, rsaSize)
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
 		require.NoError(t, err)
 		defer func(k Signer) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateRSAKeyPair(id2, rsaSize)
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
 		require.NoError(t, err)
 		defer func(k Signer) { _ = k.Delete() }(key)
 
-		attrs, err := NewAttributeSetWithID(id)
-		require.NoError(t, err)
-
+		attrs := NewAttributeSet()
+		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeyPairsWithAttributes(attrs)
 		require.Len(t, keys, 1)
 
-		attrs, err = NewAttributeSetWithID(id2)
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
 		require.Len(t, keys, 2)
 
