@@ -62,7 +62,10 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Block", func(t *testing.T) { testSymmetricBlock(t, key, key2) })
+	t.Run("Block", func(t *testing.T) {
+		skipIfMechUnsupported(t, key.context, key.Cipher.ECBMech)
+		testSymmetricBlock(t, key, key2)
+	})
 
 	iv := make([]byte, key.BlockSize())
 	for i := range iv {
@@ -70,11 +73,12 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	}
 
 	t.Run("CBC", func(t *testing.T) {
+		skipIfMechUnsupported(t, key2.context, key2.Cipher.CBCMech)
 		testSymmetricMode(t, cipher.NewCBCEncrypter(key2, iv), cipher.NewCBCDecrypter(key2, iv))
 	})
 
 	t.Run("CBCClose", func(t *testing.T) {
-
+		skipIfMechUnsupported(t, key2.context, key2.Cipher.CBCMech)
 		enc, err := key2.NewCBCEncrypterCloser(iv)
 		require.NoError(t, err)
 
@@ -87,6 +91,7 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	})
 
 	t.Run("CBCNoClose", func(t *testing.T) {
+		skipIfMechUnsupported(t, key2.context, key2.Cipher.CBCMech)
 		enc, err := key2.NewCBCEncrypter(iv)
 		require.NoError(t, err)
 
