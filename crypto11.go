@@ -242,6 +242,12 @@ type Config struct {
 
 	// LoginNotSupported should be set to true for tokens that do not support logging in.
 	LoginNotSupported bool
+
+	// UseGCMIVFromHSM should be set to true for tokens such as CloudHSM, which ignore the supplied IV for
+	// GCM mode and generate their own. In this case, the token will write the IV used into the CK_GCM_PARAMS.
+	// If UseGCMIVFromHSM is true, we will copy this IV and overwrite the 'nonce' slice passed to Seal and Open. It
+	// is therefore necessary that the nonce is the correct length (12 bytes for CloudHSM).
+	UseGCMIVFromHSM bool
 }
 
 // refCount counts the number of contexts using a particular P11 library. It must not be read or modified
