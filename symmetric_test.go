@@ -73,7 +73,8 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	}
 
 	t.Run("CBC", func(t *testing.T) {
-		skipIfMechUnsupported(t, key2.context, key2.Cipher.CBCMech)
+		// By using cipher.NewCBCEncrypter, this test will actually use ECB mode on the key.
+		skipIfMechUnsupported(t, key2.context, key2.Cipher.ECBMech)
 		testSymmetricMode(t, cipher.NewCBCEncrypter(key2, iv), cipher.NewCBCDecrypter(key2, iv))
 	})
 
