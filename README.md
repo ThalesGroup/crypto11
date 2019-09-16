@@ -71,6 +71,41 @@ list of the following options:
 in some crypto libraries). Needed for AWS CloudHSM.
 *  `DSA` - disables DSA tests. Needed for AWS CloudHSM (and any other tokens not supporting DSA).
 
+Testing with AWS CloudHSM
+-------------------------
+
+A minimal configuration file for CloudHSM will look like this:
+
+```json
+{
+  "Path" : "/opt/cloudhsm/lib/libcloudhsm_pkcs11_standard.so",
+  "TokenLabel": "cavium",
+  "Pin" : "username:password",
+  "UseGCMIVFromHSM" : true,
+}
+```
+
+To run the test suite you must skip unsupported tests:
+
+```
+CRYPTO11_SKIP=CERTS,OAEP_LABEL,DSA go test -v
+```
+
+Be sure to take note of the supported mechanisms, key types and other idiosyncrasies described at
+https://docs.aws.amazon.com/cloudhsm/latest/userguide/pkcs11-library.html. Here's a collection of things we
+noticed when testing with the  v2.0.4 PKCS#11 library:
+
+- 1024-bit RSA keys don't appear to be supported, despite what `C_GetMechanismInfo` tells you.
+- The `CKM_RSA_PKCS_OAEP` mechanism doesn't support source data. I.e. when constructing a `CK_RSA_PKCS_OAEP_PARAMS`, 
+one must set `pSourceData` to `NULL` and `ulSourceDataLen` to zero.
+- CloudHSM will generate it's own IV for GCM mode. This is described in their documentation, see footnote 4 on
+https://docs.aws.amazon.com/cloudhsm/latest/userguide/pkcs11-mechanisms.html.
+- It appears that `CKA_ID` values must be unique, otherwise you get a `CKR_ATTRIBUTE_VALUE_INVALID` error.
+- Very rapid session opening can trigger the following error:
+  ```
+  C_OpenSession failed with error CKR_ARGUMENTS_BAD : 0x00000007
+  HSM error 8c: HSM Error: Already maximum number of sessions are issued
+  ```
 
 Testing with SoftHSM2
 ---------------------
