@@ -42,6 +42,8 @@ const (
 	PaddingPKCS
 )
 
+var errBadGCMNonceSize = errors.New("nonce slice too small to hold IV")
+
 type genericAead struct {
 	key *SecretKey
 
@@ -119,6 +121,7 @@ func (g genericAead) Overhead() int {
 }
 
 func (g genericAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
+
 	var result []byte
 	if err := g.key.context.withSession(func(session *pkcs11Session) (err error) {
 		mech, params, err := g.makeMech(nonce, additionalData)
@@ -137,6 +140,10 @@ func (g genericAead) Seal(dst, nonce, plaintext, additionalData []byte) []byte {
 		}
 
 		if g.key.context.cfg.UseGCMIVFromHSM {
+			if len(nonce) != len(params.IV()) {
+				return errBadGCMNonceSize
+			}
+
 			copy(nonce, params.IV())
 		}
 
