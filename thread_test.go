@@ -33,6 +33,9 @@ var threadCount = 32
 var signaturesPerThread = 256
 
 func TestThreadedRSA(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
@@ -53,6 +56,9 @@ func TestThreadedRSA(t *testing.T) {
 
 	for i := 0; i < threadCount; i++ {
 		go signingRoutine(t, key, done)
+
+		// CloudHSM falls over if you create sessions too quickly
+		time.Sleep(50 * time.Millisecond)
 	}
 	t.Logf("Waiting for %v threads", threadCount)
 	for i := 0; i < threadCount; i++ {
@@ -69,7 +75,9 @@ func TestThreadedRSA(t *testing.T) {
 func signingRoutine(t *testing.T, key crypto.Signer, done chan int) {
 	for i := 0; i < signaturesPerThread; i++ {
 		testRsaSigningPKCS1v15(t, key, crypto.SHA1)
+
+		// CloudHSM falls over if you create sessions too quickly
+		time.Sleep(50 * time.Millisecond)
 	}
 	done <- 1
-
 }
