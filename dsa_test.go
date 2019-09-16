@@ -118,7 +118,7 @@ func TestHardDSA(t *testing.T) {
 
 		key, err := ctx.GenerateDSAKeyPairWithLabel(id, label, params)
 		require.NoError(t, err, "Failed for key size %s", parameterSizeToString(pSize))
-		defer func() { _ = key.Delete() }()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
 		testDsaSigning(t, key, pSize, "hard1")
 
