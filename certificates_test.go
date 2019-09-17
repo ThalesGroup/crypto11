@@ -36,6 +36,8 @@ import (
 )
 
 func TestCertificate(t *testing.T) {
+	skipTest(t, skipTestCert)
+
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
@@ -70,6 +72,8 @@ func TestCertificate(t *testing.T) {
 
 // Test that provided attributes override default values
 func TestCertificateAttributes(t *testing.T) {
+	skipTest(t, skipTestCert)
+
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
@@ -103,6 +107,8 @@ func TestCertificateAttributes(t *testing.T) {
 }
 
 func TestCertificateRequiredArgs(t *testing.T) {
+	skipTest(t, skipTestCert)
+
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 

@@ -294,22 +294,24 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 		// CKK_*_HMAC exists but there is no specific corresponding CKM_*_KEY_GEN
 		// mechanism. Therefore we attempt both CKM_GENERIC_SECRET_KEY_GEN and
 		// vendor-specific mechanisms.
-		for _, genMech := range cipher.GenParams {
-			template.AddIfNotPresent([]*pkcs11.Attribute{
-				pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
-				pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, genMech.KeyType),
-				pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
-				pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
-				pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
-				pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt),
-				pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt),
-				pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
-				pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
-			})
 
-			if bits > 0 {
-				template.Set(pkcs11.CKA_VALUE_LEN, bits/8)
-			}
+		template.AddIfNotPresent([]*pkcs11.Attribute{
+			pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_SECRET_KEY),
+			pkcs11.NewAttribute(pkcs11.CKA_TOKEN, true),
+			pkcs11.NewAttribute(pkcs11.CKA_SIGN, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_VERIFY, cipher.MAC),
+			pkcs11.NewAttribute(pkcs11.CKA_ENCRYPT, cipher.Encrypt), // Not supported on CloudHSM
+			pkcs11.NewAttribute(pkcs11.CKA_DECRYPT, cipher.Encrypt), // Not supported on CloudHSM
+			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
+			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+		})
+		if bits > 0 {
+			_ = template.Set(pkcs11.CKA_VALUE_LEN, bits/8) // safe for an int
+		}
+
+		for n, genMech := range cipher.GenParams {
+
+			_ = template.Set(CkaKeyType, genMech.KeyType)
 
 			mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(genMech.GenMech, nil)}
 
@@ -319,8 +321,33 @@ func (c *Context) GenerateSecretKeyWithAttributes(template AttributeSet, bits in
 				return nil
 			}
 
-			// nShield returns this if if doesn't like the CKK/CKM combination.
-			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_TEMPLATE_INCONSISTENT {
+			// As a special case, AWS CloudHSM does not accept CKA_ENCRYPT and CKA_DECRYPT on a
+			// Generic Secret key. If we are in that special case, try again without those attributes.
+			if e, ok := err.(pkcs11.Error); ok && e == pkcs11.CKR_ARGUMENTS_BAD && genMech.GenMech == pkcs11.CKM_GENERIC_SECRET_KEY_GEN {
+				adjustedTemplate := template.Copy()
+				adjustedTemplate.Unset(CkaEncrypt)
+				adjustedTemplate.Unset(CkaDecrypt)
+
+				privHandle, err = session.ctx.GenerateKey(session.handle, mech, adjustedTemplate.ToSlice())
+				if err == nil {
+					// Store the actual attributes
+					template.cloneFrom(adjustedTemplate)
+
+					k = &SecretKey{pkcs11Object{privHandle, c}, cipher}
+					return nil
+				}
+			}
+
+			if n == len(cipher.GenParams)-1 {
+				// If we have tried all available gen params, we should return a sensible error. So we skip the
+				// retry logic below and return directly.
+				return err
+			}
+
+			// nShield returns CKR_TEMPLATE_INCONSISTENT if if doesn't like the CKK/CKM combination.
+			// AWS CloudHSM returns CKR_ATTRIBUTE_VALUE_INVALID in the same circumstances.
+			if e, ok := err.(pkcs11.Error); ok &&
+				e == pkcs11.CKR_TEMPLATE_INCONSISTENT || e == pkcs11.CKR_ATTRIBUTE_VALUE_INVALID {
 				continue
 			}
 

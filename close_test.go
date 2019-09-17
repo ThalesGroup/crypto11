@@ -24,58 +24,12 @@ package crypto11
 import (
 	"crypto/dsa"
 	"crypto/elliptic"
-	"fmt"
-	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 )
-
-func TestClose(t *testing.T) {
-	// Verify that close and re-open works.
-
-	ctx, err := ConfigureFromFile("config")
-	require.NoError(t, err)
-
-	const pSize = dsa.L1024N160
-	id := randomBytes()
-	key, err := ctx.GenerateDSAKeyPair(id, dsaSizes[pSize])
-	require.NoError(t, err)
-	require.NotNil(t, key)
-
-	require.NoError(t, ctx.Close())
-
-	for i := 0; i < 5; i++ {
-		ctx, err := ConfigureFromFile("config")
-		require.NoError(t, err)
-
-		key2, err := ctx.FindKeyPair(id, nil)
-		require.NoError(t, err)
-
-		testDsaSigning(t, key2.(*pkcs11PrivateKeyDSA), pSize, fmt.Sprintf("close%d", i))
-
-		if i == 4 {
-			err = key2.Delete()
-			require.NoError(t, err)
-		}
-		
-		require.NoError(t, ctx.Close())
-	}
-}
-
-// randomBytes returns 32 random bytes.
-func randomBytes() []byte {
-	result := make([]byte, 32)
-	rand.Read(result)
-	return result
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 func TestErrorAfterClosed(t *testing.T) {
 	ctx, err := ConfigureFromFile("config")

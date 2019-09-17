@@ -39,8 +39,8 @@ func TestRandomReader(t *testing.T) {
 	reader, err := ctx.NewRandomReader()
 	require.NoError(t, err)
 
-	var a [32768]byte
-	for _, size := range []int{1, 16, 32, 256, 347, 4096, 32768} {
+	var a [8192]byte
+	for _, size := range []int{1, 16, 32, 256, 347, 4096, 8192} {
 		n, err := reader.Read(a[:size])
 		require.NoError(t, err)
 		require.Equal(t, size, n)

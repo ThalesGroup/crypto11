@@ -27,7 +27,6 @@ import (
 	"errors"
 	"io"
 	"math/big"
-	"unsafe"
 
 	"github.com/miekg/pkcs11"
 )
@@ -210,29 +209,25 @@ func decryptPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertex
 	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
-func decryptOAEP(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash, label []byte) ([]byte, error) {
-	var err error
-	var hMech, mgf, sourceData, sourceDataLen uint
-	if hMech, mgf, _, err = hashToPKCS11(hashFunction); err != nil {
+func decryptOAEP(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash,
+	label []byte) ([]byte, error) {
+
+	hashAlg, mgfAlg, _, err := hashToPKCS11(hashFunction)
+	if err != nil {
 		return nil, err
 	}
-	if len(label) > 0 {
-		sourceData = uint(uintptr(unsafe.Pointer(&label[0])))
-		sourceDataLen = uint(len(label))
-	}
-	parameters := concat(ulongToBytes(hMech),
-		ulongToBytes(mgf),
-		ulongToBytes(pkcs11.CKZ_DATA_SPECIFIED),
-		ulongToBytes(sourceData),
-		ulongToBytes(sourceDataLen))
-	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP, parameters)}
-	if err = session.ctx.DecryptInit(session.handle, mech, key.handle); err != nil {
+
+	mech := pkcs11.NewMechanism(pkcs11.CKM_RSA_PKCS_OAEP,
+		pkcs11.NewOAEPParams(hashAlg, mgfAlg, pkcs11.CKZ_DATA_SPECIFIED, label))
+
+	err = session.ctx.DecryptInit(session.handle, []*pkcs11.Mechanism{mech}, key.handle)
+	if err != nil {
 		return nil, err
 	}
 	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
-func hashToPKCS11(hashFunction crypto.Hash) (uint, uint, uint, error) {
+func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint, mgfAlg uint, hashLen uint, err error) {
 	switch hashFunction {
 	case crypto.SHA1:
 		return pkcs11.CKM_SHA_1, pkcs11.CKG_MGF1_SHA1, 20, nil

@@ -5,6 +5,8 @@ import (
 	"crypto/rsa"
 	"testing"
 
+	"github.com/miekg/pkcs11"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,31 +41,30 @@ func TestFindKeysRequiresIdOrLabel(t *testing.T) {
 
 func TestFindingKeysWithAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		id := randomBytes()
-		id2 := randomBytes()
+		label := randomBytes()
+		label2 := randomBytes()
 
-		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
+		key, err := ctx.GenerateSecretKeyWithLabel(randomBytes(), label, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateSecretKey(id2, 128, CipherAES)
+		key, err = ctx.GenerateSecretKeyWithLabel(randomBytes(), label2, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateSecretKey(id2, 256, CipherAES)
+		key, err = ctx.GenerateSecretKeyWithLabel(randomBytes(), label2, 256, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
-		attrs, err := NewAttributeSetWithID(id)
-		require.NoError(t, err)
-
+		attrs := NewAttributeSet()
+		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 
-		attrs, err = NewAttributeSetWithID(id2)
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
@@ -71,6 +72,7 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
@@ -78,44 +80,47 @@ func TestFindingKeysWithAttributes(t *testing.T) {
 		require.NoError(t, err)
 
 		keys, err = ctx.FindKeysWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 	})
 }
 
 func TestFindingKeyPairsWithAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		id := randomBytes()
-		id2 := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		// Note: we use common labels, not IDs in this test code. AWS CloudHSM
+		// does not accept two keys with the same ID.
+
+		label := randomBytes()
+		label2 := randomBytes()
+
+		key, err := ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateRSAKeyPair(id2, 1024)
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
-		key, err = ctx.GenerateRSAKeyPair(id2, 2048)
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
-		attrs, err := NewAttributeSetWithID(id)
-		require.NoError(t, err)
-
+		attrs := NewAttributeSet()
+		_ = attrs.Set(CkaLabel, label)
 		keys, err := ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 1)
 
-		attrs, err = NewAttributeSetWithID(id2)
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaLabel, label2)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 2)
 
 		attrs = NewAttributeSet()
-		err = attrs.Set(CkaPublicExponent, []byte{1, 0, 1})
-		require.NoError(t, err)
-
+		_ = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
 		require.Len(t, keys, 3)
 	})
 }
@@ -127,7 +132,7 @@ func TestFindingAllKeys(t *testing.T) {
 			key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 			require.NoError(t, err)
 
-			defer key.Delete()
+			defer func(k *SecretKey) { _ = k.Delete() }(key)
 		}
 
 		keys, err := ctx.FindAllKeys()
@@ -142,10 +147,10 @@ func TestFindingAllKeyPairs(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		for i := 1; i <= 5; i++ {
 			id := randomBytes()
-			key, err := ctx.GenerateRSAKeyPair(id, 1024)
+			key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 			require.NoError(t, err)
 
-			defer key.Delete()
+			defer func(k Signer) { _ = k.Delete() }(key)
 		}
 
 		keys, err := ctx.FindAllKeyPairs()
@@ -160,16 +165,16 @@ func TestGettingPrivateKeyAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		id := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaModulus})
 		require.NoError(t, err)
 		require.NotNil(t, attrs)
 		require.Len(t, attrs, 1)
 
-		require.Len(t, attrs[CkaModulus].Value, 128)
+		require.Len(t, attrs[CkaModulus].Value, 256)
 	})
 }
 
@@ -177,16 +182,16 @@ func TestGettingPublicKeyAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		id := randomBytes()
 
-		key, err := ctx.GenerateRSAKeyPair(id, 1024)
+		key, err := ctx.GenerateRSAKeyPair(id, rsaSize)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k Signer) { _ = k.Delete() }(key)
 
 		attrs, err := ctx.GetPubAttributes(key, []AttributeType{CkaModulusBits})
 		require.NoError(t, err)
 		require.NotNil(t, attrs)
 		require.Len(t, attrs, 1)
 
-		require.Equal(t, uint(1024), bytesToUlong(attrs[CkaModulusBits].Value))
+		require.Equal(t, uint(rsaSize), bytesToUlong(attrs[CkaModulusBits].Value))
 	})
 }
 
@@ -196,7 +201,7 @@ func TestGettingSecretKeyAttributes(t *testing.T) {
 
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
 		require.NoError(t, err)
-		defer key.Delete()
+		defer func(k *SecretKey) { _ = k.Delete() }(key)
 
 		attrs, err := ctx.GetAttributes(key, []AttributeType{CkaValueLen})
 		require.NoError(t, err)
@@ -209,7 +214,7 @@ func TestGettingSecretKeyAttributes(t *testing.T) {
 
 func TestGettingUnsupportedKeyTypeAttributes(t *testing.T) {
 	withContext(t, func(ctx *Context) {
-		key, err := rsa.GenerateKey(rand.Reader, 1024)
+		key, err := rsa.GenerateKey(rand.Reader, rsaSize)
 		require.NoError(t, err)
 
 		_, err = ctx.GetAttributes(key, []AttributeType{CkaModulusBits})

@@ -101,6 +101,8 @@ func TestNativeDSA(t *testing.T) {
 }
 
 func TestHardDSA(t *testing.T) {
+	skipTest(t, skipTestDSA)
+
 	ctx, err := ConfigureFromFile("config")
 	require.NoError(t, err)
 
@@ -115,9 +117,8 @@ func TestHardDSA(t *testing.T) {
 		label := randomBytes()
 
 		key, err := ctx.GenerateDSAKeyPairWithLabel(id, label, params)
-		require.NoError(t, err)
-		require.NotNil(t, key)
-		defer key.Delete()
+		require.NoError(t, err, "Failed for key size %s", parameterSizeToString(pSize))
+		defer func(k Signer) { _ = k.Delete() }(key)
 
 		testDsaSigning(t, key, pSize, "hard1")
 
@@ -128,6 +129,21 @@ func TestHardDSA(t *testing.T) {
 		key3, err := ctx.FindKeyPair(nil, label)
 		require.NoError(t, err)
 		testDsaSigning(t, key3.(crypto.Signer), pSize, "hard3")
+	}
+}
+
+func parameterSizeToString(s dsa.ParameterSizes) string {
+	switch s {
+	case dsa.L1024N160:
+		return "L1024N160"
+	case dsa.L2048N224:
+		return "L2048N224"
+	case dsa.L2048N256:
+		return "L2048N256"
+	case dsa.L3072N256:
+		return "L3072N256"
+	default:
+		return "unknown"
 	}
 }
 
