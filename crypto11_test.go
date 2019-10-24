@@ -278,6 +278,15 @@ func TestNoLogin(t *testing.T) {
 	assert.Equal(t, pkcs11.Error(pkcs11.CKR_USER_NOT_LOGGED_IN), p11Err)
 }
 
+func TestInvalidMaxSessions(t *testing.T) {
+	cfg, err := getConfig("config")
+	require.NoError(t, err)
+
+	cfg.MaxSessions = 1
+	_, err = Configure(cfg)
+	require.Error(t, err)
+}
+
 // randomBytes returns 32 random bytes.
 func randomBytes() []byte {
 	result := make([]byte, 32)
