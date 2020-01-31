@@ -126,7 +126,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 	var pubHandle *pkcs11.ObjectHandle
 
 	// Find the public half which has a matching CKA_ID
-	pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+	pubHandle, err = findKey(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 	if err != nil {
 		p11Err, ok := err.(pkcs11.Error)
 
