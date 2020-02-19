@@ -157,6 +157,11 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 	}
 
 	if pubHandle == nil {
+		// Try harder to find a matching public key, based on CKA_ID alone
+		pubHandle, err = findKey(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
+	}
+
+	if pubHandle == nil {
 		// We can't return a Signer if we don't have private and public key. Treat it as an error.
 		return nil, errNoPublicHalf
 	}
