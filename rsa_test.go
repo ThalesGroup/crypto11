@@ -31,6 +31,8 @@ import (
 	_ "crypto/sha512"
 	"testing"
 
+	_ "golang.org/x/crypto/sha3"
+
 	"github.com/miekg/pkcs11"
 	"github.com/stretchr/testify/require"
 )
@@ -99,19 +101,30 @@ func TestHardRSA(t *testing.T) {
 }
 
 func testRsaSigning(t *testing.T, key crypto.Signer, native bool) {
-	t.Run("SHA1", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA1) })
-	t.Run("SHA224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA224) })
-	t.Run("SHA256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA256) })
-	t.Run("SHA384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA384) })
-	t.Run("SHA512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA512) })
+	t.Run("SHA1", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA1, native) })
+	t.Run("SHA224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA224, native) })
+	t.Run("SHA256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA256, native) })
+	t.Run("SHA384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA384, native) })
+	t.Run("SHA512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA512, native) })
+	t.Run("SHA3-224", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_224, native) })
+	t.Run("SHA3-256", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_256, native) })
+	t.Run("SHA3-384", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_384, native) })
+	t.Run("SHA3-512", func(t *testing.T) { testRsaSigningPKCS1v15(t, key, crypto.SHA3_512, native) })
 	t.Run("PSSSHA1", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA1, native) })
 	t.Run("PSSSHA224", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA224, native) })
 	t.Run("PSSSHA256", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA256, native) })
 	t.Run("PSSSHA384", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA384, native) })
 	t.Run("PSSSHA512", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA512, native) })
+	t.Run("PSSSHA3-224", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA3_224, native) })
+	t.Run("PSSSHA3-256", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA3_256, native) })
+	t.Run("PSSSHA3-384", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA3_384, native) })
+	t.Run("PSSSHA3-512", func(t *testing.T) { testRsaSigningPSS(t, key, crypto.SHA3_512, native) })
 }
 
-func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto.Hash) {
+func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
+	if native && isSHA3(hashFunction) {
+		t.Skipf("native RSA does not support SHA3")
+	}
 	plaintext := []byte("sign me with PKCS#1 v1.5")
 	h := hashFunction.New()
 	_, err := h.Write(plaintext)
@@ -122,14 +135,21 @@ func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto
 	require.NoError(t, err)
 
 	rsaPubkey := key.Public().(crypto.PublicKey).(*rsa.PublicKey)
-	err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	if !isSHA3(hashFunction) {
+		err = rsa.VerifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	} else {
+		// the standard library does not yet support SHA3 with the RSASSA-PKCS1-v1_5 algorithm so using a custom
+		// verify function that does have support for SHA3
+		err = verifyPKCS1v15(rsaPubkey, hashFunction, plaintextHash, sig)
+	}
 	require.NoError(t, err)
 }
 
 func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
-
 	if !native {
 		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
+	} else if isSHA3(hashFunction) {
+		t.Skipf("native RSA does not support SHA3")
 	}
 
 	plaintext := []byte("sign me with PSS")
@@ -167,6 +187,21 @@ func testRsaEncryption(t *testing.T, key crypto.Decrypter, native bool) {
 			testRsaEncryptionOAEP(t, key, crypto.SHA384, []byte{10, 11, 12, 13, 14, 15}, native)
 		})
 		t.Run("OAEPSHA512Label", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA512, []byte{16, 17, 18}, native) })
+	}
+
+	t.Run("OAEPSHA3-224", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA3_224, []byte{}, native) })
+	t.Run("OAEPSHA3-256", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA3_256, []byte{}, native) })
+	t.Run("OAEPSHA3-384", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA3_384, []byte{}, native) })
+	t.Run("OAEPSHA3-512", func(t *testing.T) { testRsaEncryptionOAEP(t, key, crypto.SHA3_512, []byte{}, native) })
+}
+
+// isSHA3 returns true if the hash function is part of the SHA3 family
+func isSHA3(hash crypto.Hash) bool {
+	switch hash {
+	case crypto.SHA3_224, crypto.SHA3_256, crypto.SHA3_384, crypto.SHA3_512:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -209,8 +244,12 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 		info, err := key.(*pkcs11PrivateKeyRSA).context.ctx.GetInfo()
 		require.NoError(t, err)
 
+		// The SHA3
 		if info.ManufacturerID == "SoftHSM" && (hashFunction != crypto.SHA1 || len(label) > 0) {
-			t.Skipf("SoftHSM OAEP only supports SHA-1 with no label")
+			// SHA3 hashes use a hybrid method which do not have this limitation
+			if !isSHA3(hashFunction) {
+				t.Skipf("SoftHSM OAEP only supports SHA-1 with no label")
+			}
 		}
 	}
 

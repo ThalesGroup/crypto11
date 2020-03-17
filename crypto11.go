@@ -174,6 +174,9 @@ type Context struct {
 	// persistentSession is a session held open so we can be confident handles and login status
 	// persist for the duration of this context
 	persistentSession pkcs11.SessionHandle
+
+	// Cache the supported Mechanisms to allow for quick lookups
+	supportedMechs map[uint]*pkcs11.Mechanism
 }
 
 // Signer is a PKCS#11 key that implements crypto.Signer.
@@ -350,6 +353,18 @@ func Configure(config *Config) (*Context, error) {
 				return nil, errors.WithMessagef(err, "failed to log into long term session")
 			}
 		}
+	}
+
+	// Get the list of supported mechanisms and cache into a map for fast lookups
+	mechs, err := instance.ctx.GetMechanismList(instance.slot)
+	if err != nil {
+		_ = instance.ctx.Finalize()
+		instance.ctx.Destroy()
+		return nil, errors.WithMessagef(err, "failed to read supported mechanisms")
+	}
+	instance.supportedMechs = make(map[uint]*pkcs11.Mechanism, len(mechs))
+	for _, mech := range mechs {
+		instance.supportedMechs[mech.Mechanism] = mech
 	}
 
 	// Increment the reference count

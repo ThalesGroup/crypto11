@@ -74,7 +74,7 @@ func TestThreadedRSA(t *testing.T) {
 
 func signingRoutine(t *testing.T, key crypto.Signer, done chan int) {
 	for i := 0; i < signaturesPerThread; i++ {
-		testRsaSigningPKCS1v15(t, key, crypto.SHA1)
+		testRsaSigningPKCS1v15(t, key, crypto.SHA1, false)
 
 		// CloudHSM falls over if you create sessions too quickly
 		time.Sleep(50 * time.Millisecond)

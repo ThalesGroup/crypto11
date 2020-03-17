@@ -28,6 +28,8 @@ import (
 	"io"
 	"math/big"
 
+	_ "golang.org/x/crypto/sha3"
+
 	"github.com/miekg/pkcs11"
 )
 
@@ -188,7 +190,12 @@ func (priv *pkcs11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, opti
 			case *rsa.PKCS1v15DecryptOptions:
 				plaintext, err = decryptPKCS1v15(session, priv, ciphertext, o.SessionKeyLen)
 			case *rsa.OAEPOptions:
-				plaintext, err = decryptOAEP(session, priv, ciphertext, o.Hash, o.Label)
+				// Check if the mechanism is supported by the hardware, otherwise use the software assisted version
+				if hashSupportedByHardware(priv.context, o.Hash) {
+					plaintext, err = decryptOAEP(session, priv, ciphertext, o.Hash, o.Label)
+				} else {
+					plaintext, err = decryptOAEPHybrid(session, priv, ciphertext, o.Hash, o.Label)
+				}
 			default:
 				err = errUnsupportedRSAOptions
 			}
@@ -198,6 +205,7 @@ func (priv *pkcs11PrivateKeyRSA) Decrypt(rand io.Reader, ciphertext []byte, opti
 	return plaintext, err
 }
 
+// decryptPKCS1v15 decrypts the ciphertext using EMSA PKCS#1 v1.5 padding scheme
 func decryptPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
 	if sessionKeyLen != 0 {
 		return nil, errUnsupportedRSAOptions
@@ -209,6 +217,19 @@ func decryptPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertex
 	return session.ctx.Decrypt(session.handle, ciphertext)
 }
 
+// decryptX509 decrypts the ciphertext using no padding scheme (raw)
+func decryptX509(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, sessionKeyLen int) ([]byte, error) {
+	if sessionKeyLen != 0 {
+		return nil, errUnsupportedRSAOptions
+	}
+	mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_RSA_X_509, nil)}
+	if err := session.ctx.DecryptInit(session.handle, mech, key.handle); err != nil {
+		return nil, err
+	}
+	return session.ctx.Decrypt(session.handle, ciphertext)
+}
+
+// decryptOAEP decrypts the ciphertext using EMSA OAEP padding scheme
 func decryptOAEP(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, hashFunction crypto.Hash,
 	label []byte) ([]byte, error) {
 
@@ -239,28 +260,44 @@ func hashToPKCS11(hashFunction crypto.Hash) (hashAlg uint, mgfAlg uint, hashLen 
 		return pkcs11.CKM_SHA384, pkcs11.CKG_MGF1_SHA384, 48, nil
 	case crypto.SHA512:
 		return pkcs11.CKM_SHA512, pkcs11.CKG_MGF1_SHA512, 64, nil
+	case crypto.SHA3_224:
+		return pkcs11.CKM_SHA3_224, pkcs11.CKG_MGF1_SHA3_224, 28, nil
+	case crypto.SHA3_256:
+		return pkcs11.CKM_SHA3_256, pkcs11.CKG_MGF1_SHA3_256, 32, nil
+	case crypto.SHA3_384:
+		return pkcs11.CKM_SHA3_384, pkcs11.CKG_MGF1_SHA3_384, 48, nil
+	case crypto.SHA3_512:
+		return pkcs11.CKM_SHA3_512, pkcs11.CKG_MGF1_SHA3_512, 64, nil
 	default:
 		return 0, 0, 0, errUnsupportedRSAOptions
 	}
 }
 
-func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
-	var hMech, mgf, hLen, sLen uint
-	var err error
-	if hMech, mgf, hLen, err = hashToPKCS11(opts.Hash); err != nil {
-		return nil, err
+func decodePSSOptions(opts *rsa.PSSOptions) (hashAlg, mgfAlg, hashLen, saltLen uint, err error) {
+	hashAlg, mgfAlg, hashLen, err = hashToPKCS11(opts.Hash)
+	if err != nil {
+		return
 	}
 	switch opts.SaltLength {
 	case rsa.PSSSaltLengthAuto: // parseltongue constant
 		// TODO we could (in principle) work out the biggest
 		// possible size from the key, but until someone has
 		// the effort to do that...
-		return nil, errUnsupportedRSAOptions
+		err = errUnsupportedRSAOptions
 	case rsa.PSSSaltLengthEqualsHash:
-		sLen = hLen
+		saltLen = hashLen
 	default:
-		sLen = uint(opts.SaltLength)
+		saltLen = uint(opts.SaltLength)
 	}
+	return
+}
+
+func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
+	hMech, mgf, _, sLen, err := decodePSSOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO this is pretty horrible, maybe the PKCS#11 wrapper
 	// could be improved to help us out here
 	parameters := concat(ulongToBytes(hMech),
@@ -274,11 +311,15 @@ func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, op
 }
 
 var pkcs1Prefix = map[crypto.Hash][]byte{
-	crypto.SHA1:   {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14},
-	crypto.SHA224: {0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00, 0x04, 0x1c},
-	crypto.SHA256: {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
-	crypto.SHA384: {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
-	crypto.SHA512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
+	crypto.SHA1:     {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14},
+	crypto.SHA224:   {0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x04, 0x05, 0x00, 0x04, 0x1c},
+	crypto.SHA256:   {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20},
+	crypto.SHA384:   {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30},
+	crypto.SHA512:   {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40},
+	crypto.SHA3_224: {0x30, 0x2d, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x07, 0x05, 0x00, 0x04, 0x1c},
+	crypto.SHA3_256: {0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x08, 0x05, 0x00, 0x04, 0x20},
+	crypto.SHA3_384: {0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x09, 0x05, 0x00, 0x04, 0x30},
+	crypto.SHA3_512: {0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x0a, 0x05, 0x00, 0x04, 0x40},
 }
 
 func signPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, hash crypto.Hash) (signature []byte, err error) {
@@ -308,11 +349,16 @@ func signPKCS1v15(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byt
 // implementation may impose further restrictions.
 func (priv *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
 	err = priv.context.withSession(func(session *pkcs11Session) error {
-		switch opts.(type) {
+		switch o := opts.(type) {
 		case *rsa.PSSOptions:
-			signature, err = signPSS(session, priv, digest, opts.(*rsa.PSSOptions))
+			// Check if the mechanism is supported by the hardware, otherwise use the software assisted version
+			if hashSupportedByHardware(priv.context, o.Hash) {
+				signature, err = signPSS(session, priv, digest, o)
+			} else {
+				signature, err = signPSSHybrid(session, priv, digest, o)
+			}
 		default: /* PKCS1-v1_5 */
-			signature, err = signPKCS1v15(session, priv, digest, opts.HashFunc())
+			signature, err = signPKCS1v15(session, priv, digest, o.HashFunc())
 		}
 		return err
 	})
@@ -322,4 +368,65 @@ func (priv *pkcs11PrivateKeyRSA) Sign(rand io.Reader, digest []byte, opts crypto
 	}
 
 	return signature, err
+}
+
+// hashSupportedByHardware determines if the hash function is supported by the hardware device.
+// The assumption here is that if SHA3 is supported then SHA3 with RSASSA-PSS and RSAES-OAEP is also supported.
+func hashSupportedByHardware(c *Context, hashFunction crypto.Hash) bool {
+	// Currently SHA3 is not widely supported for use with RSASSA-PSS and RSAES-OAEP
+	// Fall into the slow path and validate if the HSM supported it or not.
+	switch hashFunction {
+	case crypto.SHA3_224, crypto.SHA3_256, crypto.SHA3_384, crypto.SHA3_512:
+		break
+	default:
+		return true
+	}
+
+	// Check if the mechanism is supported by the hardware
+	mech, _, _, _ := hashToPKCS11(hashFunction)
+	_, ok := c.supportedMechs[mech]
+	return ok
+}
+
+// signPSSHybrid manually calculates the EMSA-PSS padding and performs a raw decryption operation with the given key
+func signPSSHybrid(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, opts *rsa.PSSOptions) ([]byte, error) {
+	_, _, _, sLen, err := decodePSSOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate random salt value
+	salt, err := key.context.GenerateRandomBytes(sLen)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now generate the encoded message (EM)
+	pubKey := key.Public().(*rsa.PublicKey)
+	nBits := pubKey.N.BitLen()
+	em, err := emsaPSSEncode(digest, nBits-1, salt, opts.Hash.New())
+	if err != nil {
+		return nil, err
+	}
+
+	return decryptX509(session, key, em, 0)
+}
+
+// decryptOAEPHybrid decrypts the ciphertext and manually decodes the RSAES-OAEP message. This method allows for SHA3
+// support while still using HSM protected keys.
+func decryptOAEPHybrid(session *pkcs11Session, key *pkcs11PrivateKeyRSA, ciphertext []byte, hashFn crypto.Hash, label []byte) ([]byte, error) {
+	// Validate the ciphertext is the correct size
+	k := key.pubKey.(*rsa.PublicKey).Size()
+	if len(ciphertext) > k || k < hashFn.Size()*2+2 {
+		return nil, rsa.ErrDecryption
+	}
+
+	// Decrypt the ciphertext using no padding scheme
+	message, err := decryptX509(session, key, ciphertext, 0)
+	if err != nil {
+		return nil, err
+	}
+	// remove the OAEP padding from the message
+	plaintext, err := rsaESOAEPDecode(hashFn.New(), k, message, label)
+	return plaintext, err
 }
