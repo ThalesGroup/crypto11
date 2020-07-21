@@ -261,6 +261,7 @@ func (c *Context) GenerateECDSAKeyPairWithAttributes(public, private AttributeSe
 			pkcs11.NewAttribute(pkcs11.CKA_SIGN, true),
 			pkcs11.NewAttribute(pkcs11.CKA_SENSITIVE, true),
 			pkcs11.NewAttribute(pkcs11.CKA_EXTRACTABLE, false),
+			pkcs11.NewAttribute(pkcs11.CKA_DERIVE, true),
 		})
 
 		mech := []*pkcs11.Mechanism{pkcs11.NewMechanism(pkcs11.CKM_ECDSA_KEY_PAIR_GEN, nil)}
