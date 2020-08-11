@@ -207,7 +207,7 @@ func removeAllCertificates(t *testing.T, c *Context) {
 			t.Fatalf("failed to init: %s\n", e)
 		}
 		objs, _, e := session.ctx.FindObjects(session.handle, maxHandlePerFind)
-		if e != nil || len(objs) == 0 {
+		if e != nil {
 			t.Fatalf("failed to find objects")
 		}
 		if e := session.ctx.FindObjectsFinal(session.handle); e != nil {
