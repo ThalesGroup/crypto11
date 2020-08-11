@@ -35,6 +35,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestFindAllCertificates(t *testing.T) {
+	skipTest(t, skipTestCert)
+
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	for i := 0; i < 5; i++ {
+		id := randomBytes()
+		label := randomBytes()
+
+		cert := generateRandomCert(t)
+
+		err = ctx.ImportCertificateWithLabel(id, label, cert)
+		require.NoError(t, err)
+	}
+
+	gotCerts, err := ctx.FindAllCertificates()
+	require.NoError(t, err)
+	require.True(t, len(gotCerts) > 5)
+}
+
 func TestCertificate(t *testing.T) {
 	skipTest(t, skipTestCert)
 
