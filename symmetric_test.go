@@ -249,6 +249,16 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 		additionalData[i] = byte(i + 16)
 	}
 	ciphertext := aead.Seal([]byte{}, nonce, plaintext, additionalData)
+
+	/*
+		In some HSM configurations the IV may be generated and appended to the ciphertext + tag
+		If this is the case (based on the ciphertext length), the test assumes that the IV has been appended
+	*/
+	if len(ciphertext) == aead.NonceSize()+len(plaintext)+aead.Overhead() {
+		nonce = ciphertext[len(ciphertext)-aead.NonceSize():]
+		ciphertext = ciphertext[:len(ciphertext)-aead.NonceSize()]
+	}
+
 	decrypted, err := aead.Open([]byte{}, nonce, ciphertext, additionalData)
 	if err != nil {
 		t.Errorf("aead.Open: %s", err)
