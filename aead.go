@@ -73,7 +73,9 @@ func (key *SecretKey) NewGCM() (cipher.AEAD, error) {
 		makeMech: func(nonce []byte, additionalData []byte, encrypt bool) ([]*pkcs11.Mechanism, *pkcs11.GCMParams, error) {
 			var params *pkcs11.GCMParams
 
-			if (encrypt && key.context.cfg.UseGCMIVFromHSM && !key.context.cfg.GCMIVFromHSMControl.SupplyIvForHSMGCMEncrypt) || (!encrypt && key.context.cfg.UseGCMIVFromHSM && !key.context.cfg.GCMIVFromHSMControl.SupplyIvForHSMGCMDecrypt) {
+			if (encrypt && key.context.cfg.UseGCMIVFromHSM &&
+				!key.context.cfg.GCMIVFromHSMControl.SupplyIvForHSMGCMEncrypt) || (!encrypt &&
+				key.context.cfg.UseGCMIVFromHSM && !key.context.cfg.GCMIVFromHSMControl.SupplyIvForHSMGCMDecrypt) {
 				params = pkcs11.NewGCMParams(nil, additionalData, 16*8 /*bits*/)
 			} else {
 				params = pkcs11.NewGCMParams(nonce, additionalData, 16*8 /*bits*/)
