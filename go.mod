@@ -1,6 +1,6 @@
 module github.com/ProsaicSatsuma/crypto11
 
-go 1.12
+go 1.13
 
 require (
 	github.com/miekg/pkcs11 v1.0.3-0.20190429190417-a667d056470f
