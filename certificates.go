@@ -40,9 +40,11 @@ func findCertificate(session *pkcs11Session, id []byte, label []byte, serial *bi
 		return nil, err
 	}
 
-	cert, err = x509.ParseCertificate(rawCertificate)
-	if err != nil {
-		return nil, err
+	if rawCertificate != nil {
+		cert, err = x509.ParseCertificate(rawCertificate)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return cert, err
