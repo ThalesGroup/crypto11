@@ -249,3 +249,51 @@ func (c *Context) ImportCertificateWithAttributes(template AttributeSet, certifi
 
 	return err
 }
+
+// DeleteCertificate destroys a previously imported certificate. it will return
+// nil if succeeds or if the certificate does not exist. Any combination of id,
+// label and serial can be provided. An error is return if all are nil.
+func (c *Context) DeleteCertificate(id []byte, label []byte, serial *big.Int) error {
+	if id == nil && label == nil && serial == nil {
+		return errors.New("id, label and serial cannot all be nil")
+	}
+
+	template := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
+	}
+
+	if id != nil {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
+	}
+	if label != nil {
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
+	}
+	if serial != nil {
+		asn1Serial, err := asn1.Marshal(serial)
+		if err != nil {
+			return err
+		}
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, asn1Serial))
+	}
+
+	err := c.withSession(func(session *pkcs11Session) error {
+		err := session.ctx.FindObjectsInit(session.handle, template)
+		if err != nil {
+			return err
+		}
+		handles, _, err := session.ctx.FindObjects(session.handle, 1)
+		finalErr := session.ctx.FindObjectsFinal(session.handle)
+		if err != nil {
+			return err
+		}
+		if finalErr != nil {
+			return finalErr
+		}
+		if len(handles) == 0 {
+			return nil
+		}
+		return session.ctx.DestroyObject(session.handle, handles[0])
+	})
+
+	return err
+}

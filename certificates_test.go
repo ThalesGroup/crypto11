@@ -130,6 +130,83 @@ func TestCertificateRequiredArgs(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDeleteCertificate(t *testing.T) {
+	skipTest(t, skipTestCert)
+
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	randomCert := func() ([]byte, []byte, *x509.Certificate) {
+		id := randomBytes()
+		label := randomBytes()
+		cert := generateRandomCert(t)
+		return id, label, cert
+	}
+	importCertificate := func() ([]byte, []byte, *big.Int) {
+		id, label, cert := randomCert()
+		err = ctx.ImportCertificateWithLabel(id, label, cert)
+		require.NoError(t, err)
+
+		cert2, err := ctx.FindCertificate(id, label, cert.SerialNumber)
+		require.NoError(t, err)
+		require.NotNil(t, cert2)
+		assert.Equal(t, cert.Signature, cert2.Signature)
+
+		return id, label, cert.SerialNumber
+	}
+
+	err = ctx.DeleteCertificate(nil, nil, nil)
+	require.Error(t, err)
+
+	id, label, cert := randomCert()
+	err = ctx.DeleteCertificate(id, label, cert.SerialNumber)
+	require.NoError(t, err)
+
+	id, label, serial := importCertificate()
+	err = ctx.DeleteCertificate(id, label, serial)
+	require.NoError(t, err)
+
+	cert, err = ctx.FindCertificate(id, label, serial)
+	require.NoError(t, err)
+	require.Nil(t, cert)
+
+	id, label, serial = importCertificate()
+	err = ctx.DeleteCertificate(id, label, nil)
+	require.NoError(t, err)
+
+	cert, err = ctx.FindCertificate(id, label, serial)
+	require.NoError(t, err)
+	require.Nil(t, cert)
+
+	id, label, serial = importCertificate()
+	err = ctx.DeleteCertificate(id, nil, nil)
+	require.NoError(t, err)
+
+	cert, err = ctx.FindCertificate(id, label, serial)
+	require.NoError(t, err)
+	require.Nil(t, cert)
+
+	id, label, serial = importCertificate()
+	err = ctx.DeleteCertificate(nil, label, nil)
+	require.NoError(t, err)
+
+	cert, err = ctx.FindCertificate(id, label, serial)
+	require.NoError(t, err)
+	require.Nil(t, cert)
+
+	id, label, serial = importCertificate()
+	err = ctx.DeleteCertificate(nil, nil, serial)
+	require.NoError(t, err)
+
+	cert, err = ctx.FindCertificate(id, label, serial)
+	require.NoError(t, err)
+	require.Nil(t, cert)
+}
+
 func generateRandomCert(t *testing.T) *x509.Certificate {
 	serial, err := rand.Int(rand.Reader, big.NewInt(20000))
 	require.NoError(t, err)
