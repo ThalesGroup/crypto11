@@ -163,9 +163,12 @@ func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto
 	require.NoError(t, err)
 
 	plaintextHash := h.Sum([]byte{}) // weird API
-	// crypto.dsa.Sign doesn't truncate the hash!
-	qbytes := (dsaSizes[psize].Q.BitLen() + 7) / 8
-	plaintextHash = plaintextHash[:qbytes]
+	// According to FIPS 186-3, section 4.6, the hash should be truncated to the byte-length of the subgroup
+	// if it is longer than the subgroup length, but crypto/dsa doesn't do it automatically.
+	subgroupSize := (dsaSizes[psize].Q.BitLen() + 7) / 8
+	if len(plaintextHash) > subgroupSize {
+		plaintextHash = plaintextHash[:subgroupSize]
+	}
 
 	sigDER, err := key.Sign(rand.Reader, plaintextHash, hashFunction)
 	require.NoError(t, err)
