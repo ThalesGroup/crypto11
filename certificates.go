@@ -31,26 +31,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// FindCertificate retrieves a previously imported certificate. Any combination of id, label
-// and serial can be provided. An error is return if all are nil.
 func findCertificate(session *pkcs11Session, id []byte, label []byte, serial *big.Int) (cert *x509.Certificate, err error) {
-
-	rawCertificate, err := findRawCertificate(session, id, label, serial)
-	if err != nil {
-		return nil, err
-	}
-
-	if rawCertificate != nil {
-		cert, err = x509.ParseCertificate(rawCertificate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return cert, err
-}
-
-func findRawCertificate(session *pkcs11Session, id []byte, label []byte, serial *big.Int) (rawCertificate []byte, err error) {
 	if id == nil && label == nil && serial == nil {
 		return nil, errors.New("id, label and serial cannot all be nil")
 	}
@@ -72,6 +53,36 @@ func findRawCertificate(session *pkcs11Session, id []byte, label []byte, serial 
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_SERIAL_NUMBER, derSerial))
 	}
 
+	handles, err := findCertificatesWithAttributes(session, template)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(handles) == 0 {
+		return nil, nil
+	}
+
+	return getX509Certificate(session, handles[0])
+}
+
+func getX509Certificate(session *pkcs11Session, handle pkcs11.ObjectHandle) (cert *x509.Certificate, err error) {
+	attributes := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_VALUE, 0),
+	}
+
+	if attributes, err = session.ctx.GetAttributeValue(session.handle, handle, attributes); err != nil {
+		return nil, err
+	}
+
+	cert, err = x509.ParseCertificate(attributes[0].Value)
+	if err != nil {
+		return nil, err
+	}
+
+	return cert, nil
+}
+
+func findCertificatesWithAttributes(session *pkcs11Session, template []*pkcs11.Attribute) (handles []pkcs11.ObjectHandle, err error) {
 	template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))
 
 	if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
@@ -84,25 +95,20 @@ func findRawCertificate(session *pkcs11Session, id []byte, label []byte, serial 
 		}
 	}()
 
-	handles, _, err := session.ctx.FindObjects(session.handle, 1)
-	if err != nil {
-		return nil, err
-	}
-	if len(handles) == 0 {
-		return nil, nil
-	}
+	for {
+		newhandles, _, err := session.ctx.FindObjects(session.handle, maxHandlePerFind)
+		if err != nil {
+			return nil, err
+		}
 
-	attributes := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_VALUE, 0),
-	}
+		if len(newhandles) == 0 {
+			break
+		}
 
-	if attributes, err = session.ctx.GetAttributeValue(session.handle, handles[0], attributes); err != nil {
-		return nil, err
+		handles = append(handles, newhandles...)
 	}
 
-	rawCertificate = attributes[0].Value
-
-	return
+	return handles, nil
 }
 
 // FindCertificate retrieves a previously imported certificate. Any combination of id, label
@@ -258,9 +264,7 @@ func (c *Context) DeleteCertificate(id []byte, label []byte, serial *big.Int) er
 		return errors.New("id, label and serial cannot all be nil")
 	}
 
-	template := []*pkcs11.Attribute{
-		pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE),
-	}
+	var template []*pkcs11.Attribute
 
 	if id != nil {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
@@ -277,21 +281,15 @@ func (c *Context) DeleteCertificate(id []byte, label []byte, serial *big.Int) er
 	}
 
 	err := c.withSession(func(session *pkcs11Session) error {
-		err := session.ctx.FindObjectsInit(session.handle, template)
+		handles, err := findCertificatesWithAttributes(session, template)
 		if err != nil {
 			return err
 		}
-		handles, _, err := session.ctx.FindObjects(session.handle, 1)
-		finalErr := session.ctx.FindObjectsFinal(session.handle)
-		if err != nil {
-			return err
-		}
-		if finalErr != nil {
-			return finalErr
-		}
+
 		if len(handles) == 0 {
 			return nil
 		}
+
 		return session.ctx.DestroyObject(session.handle, handles[0])
 	})
 
