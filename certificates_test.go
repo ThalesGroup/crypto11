@@ -48,7 +48,7 @@ func TestCertificate(t *testing.T) {
 	id := randomBytes()
 	label := randomBytes()
 
-	cert := generateRandomCert(t)
+	cert := generateRandomCert(t, nil, "Foo", nil, nil)
 
 	err = ctx.ImportCertificateWithLabel(id, label, cert)
 	require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestCertificateAttributes(t *testing.T) {
 		require.NoError(t, ctx.Close())
 	}()
 
-	cert := generateRandomCert(t)
+	cert := generateRandomCert(t, nil, "Foo", nil, nil)
 
 	// We import this with a different serial number, to test this is obeyed
 	ourSerial := new(big.Int)
@@ -116,7 +116,7 @@ func TestCertificateRequiredArgs(t *testing.T) {
 		require.NoError(t, ctx.Close())
 	}()
 
-	cert := generateRandomCert(t)
+	cert := generateRandomCert(t, nil, "Foo", nil, nil)
 
 	val := randomBytes()
 
@@ -143,7 +143,7 @@ func TestDeleteCertificate(t *testing.T) {
 	randomCert := func() ([]byte, []byte, *x509.Certificate) {
 		id := randomBytes()
 		label := randomBytes()
-		cert := generateRandomCert(t)
+		cert := generateRandomCert(t, nil, "Foo", nil, nil)
 		return id, label, cert
 	}
 	importCertificate := func() ([]byte, []byte, *big.Int) {
@@ -207,14 +207,98 @@ func TestDeleteCertificate(t *testing.T) {
 	require.Nil(t, cert)
 }
 
-func generateRandomCert(t *testing.T) *x509.Certificate {
+func TestCertificateChain(t *testing.T) {
+	skipTest(t, skipTestCert)
+
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	certNames := []string{"Cert0", "Cert1", "Cert2"}
+
+	var (
+		parent                       *x509.Certificate
+		originCertChain              []*x509.Certificate
+		authorityKeyId, subjectKeyID []byte
+		ids                          [][]byte
+	)
+
+	for _, name := range certNames {
+		subjectKeyID = randomBytes()
+
+		cert := generateRandomCert(t, parent, name, authorityKeyId, subjectKeyID)
+
+		id := randomBytes()
+		ids = append([][]byte{id}, ids...)
+
+		err = ctx.ImportCertificate(id, cert)
+		require.NoError(t, err)
+
+		originCertChain = append([]*x509.Certificate{cert}, originCertChain...)
+
+		parent = cert
+		authorityKeyId = subjectKeyID
+	}
+
+	foundCertChain, err := ctx.FindCertificateChain(ids[0], nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, foundCertChain)
+
+	assert.Equal(t, len(foundCertChain), len(originCertChain))
+
+	for i := 0; i < len(foundCertChain); i++ {
+		assert.Equal(t, foundCertChain[i].Signature, originCertChain[i].Signature)
+	}
+
+	err = ctx.DeleteCertificate(ids[len(ids)-1], nil, nil)
+	require.NoError(t, err)
+
+	oldCert := originCertChain[len(originCertChain)-1]
+	newCert := generateRandomCert(t, nil, "NewCert", oldCert.AuthorityKeyId, oldCert.SubjectKeyId)
+
+	originCertChain[len(originCertChain)-1] = newCert
+
+	id := randomBytes()
+
+	err = ctx.ImportCertificate(id, newCert)
+	require.NoError(t, err)
+
+	ids[len(ids)-1] = id
+
+	foundCertChain, err = ctx.FindCertificateChain(ids[0], nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, foundCertChain)
+
+	assert.Equal(t, len(foundCertChain), len(originCertChain))
+
+	for i := 0; i < len(foundCertChain); i++ {
+		assert.Equal(t, foundCertChain[i].Signature, originCertChain[i].Signature)
+	}
+
+	for _, id := range ids {
+		err = ctx.DeleteCertificate(id, nil, nil)
+		require.NoError(t, err)
+	}
+
+	foundCertChain, err = ctx.FindCertificateChain([]byte("test2"), nil, nil)
+	require.NoError(t, err)
+	assert.Nil(t, foundCertChain)
+}
+
+func generateRandomCert(t *testing.T, parent *x509.Certificate, commonName string,
+	authorityKeyId, subjectKeyID []byte) *x509.Certificate {
 	serial, err := rand.Int(rand.Reader, big.NewInt(20000))
 	require.NoError(t, err)
 
-	ca := &x509.Certificate{
+	template := &x509.Certificate{
 		Subject: pkix.Name{
-			CommonName: "Foo",
+			CommonName: commonName,
 		},
+		AuthorityKeyId:        authorityKeyId,
+		SubjectKeyId:          subjectKeyID,
 		SerialNumber:          serial,
 		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
 		IsCA:                  true,
@@ -223,11 +307,15 @@ func generateRandomCert(t *testing.T) *x509.Certificate {
 		BasicConstraintsValid: true,
 	}
 
+	if parent == nil {
+		parent = template
+	}
+
 	key, err := rsa.GenerateKey(rand.Reader, 4096)
 	require.NoError(t, err)
 
 	csr := &key.PublicKey
-	certBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, csr, key)
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, parent, csr, key)
 	require.NoError(t, err)
 
 	cert, err := x509.ParseCertificate(certBytes)

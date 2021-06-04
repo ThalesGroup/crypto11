@@ -85,7 +85,7 @@ func TestErrorAfterClosed(t *testing.T) {
 	_, err = ctx.NewRandomReader()
 	assert.Equal(t, errClosed, err)
 
-	cert := generateRandomCert(t)
+	cert := generateRandomCert(t, nil, "Foo", nil, nil)
 
 	err = ctx.ImportCertificate(bytes, cert)
 	assert.Equal(t, errClosed, err)
