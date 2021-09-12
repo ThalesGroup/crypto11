@@ -27,6 +27,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"github.com/miekg/pkcs11"
 	"math/big"
 	"testing"
 	"time"
@@ -34,6 +35,33 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFindAllCertificates(t *testing.T) {
+	skipTest(t, skipTestCert)
+
+	ctx, err := ConfigureFromFile("config")
+	require.NoError(t, err)
+
+	defer func() {
+		require.NoError(t, ctx.Close())
+	}()
+
+	for i := 0; i < 5; i++ {
+		id := randomBytes()
+		label := randomBytes()
+
+		cert := generateRandomCert(t)
+
+		err = ctx.ImportCertificateWithLabel(id, label, cert)
+		require.NoError(t, err)
+	}
+
+	gotCerts, err := ctx.FindAllCertificates()
+	require.NoError(t, err)
+	require.Len(t, gotCerts, 5)
+
+	removeAllCertificates(t, ctx)
+}
 
 func TestCertificate(t *testing.T) {
 	skipTest(t, skipTestCert)
@@ -68,6 +96,8 @@ func TestCertificate(t *testing.T) {
 	require.NotNil(t, cert2)
 
 	assert.Equal(t, cert.Signature, cert2.Signature)
+
+	removeAllCertificates(t, ctx)
 }
 
 // Test that provided attributes override default values
@@ -104,6 +134,8 @@ func TestCertificateAttributes(t *testing.T) {
 	// Find with new serial
 	c, err = ctx.FindCertificate(nil, nil, ourSerial)
 	assert.NotNil(t, c)
+
+	removeAllCertificates(t, ctx)
 }
 
 func TestCertificateRequiredArgs(t *testing.T) {
@@ -128,6 +160,8 @@ func TestCertificateRequiredArgs(t *testing.T) {
 
 	err = ctx.ImportCertificateWithLabel(val, val, nil)
 	require.Error(t, err)
+
+	removeAllCertificates(t, ctx)
 }
 
 func TestDeleteCertificate(t *testing.T) {
@@ -234,4 +268,34 @@ func generateRandomCert(t *testing.T) *x509.Certificate {
 	require.NoError(t, err)
 
 	return cert
+}
+
+func removeAllCertificates(t *testing.T, c *Context) {
+	if c.closed.Get() {
+		t.Error(errClosed)
+	}
+
+	err := c.withSession(func(session *pkcs11Session) (err error) {
+
+		var template []*pkcs11.Attribute
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))
+
+		if e := session.ctx.FindObjectsInit(session.handle, template); e != nil {
+			t.Fatalf("failed to init: %s\n", e)
+		}
+		objs, _, e := session.ctx.FindObjects(session.handle, maxHandlePerFind)
+		if e != nil {
+			t.Fatalf("failed to find objects")
+		}
+		if e := session.ctx.FindObjectsFinal(session.handle); e != nil {
+			t.Fatalf("failed to finalize: %s\n", e)
+		}
+		for _, obj := range objs {
+			if e := session.ctx.DestroyObject(session.handle, obj); e != nil {
+				t.Fatalf("DestroyObject failed: %s\n", e)
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }

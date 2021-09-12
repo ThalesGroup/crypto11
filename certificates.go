@@ -175,6 +175,61 @@ func (c *Context) FindAllPairedCertificates() (certificates []tls.Certificate, e
 	return
 }
 
+// FindAllCertificates retrieves all certificates or a nil slice if none can be found.
+func (c *Context) FindAllCertificates() ([]*x509.Certificate, error) {
+
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	var certs []*x509.Certificate
+	err := c.withSession(func(session *pkcs11Session) (err error) {
+
+		var template []*pkcs11.Attribute
+		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_CLASS, pkcs11.CKO_CERTIFICATE))
+
+		if err = session.ctx.FindObjectsInit(session.handle, template); err != nil {
+			return err
+		}
+		defer func() {
+			finalErr := session.ctx.FindObjectsFinal(session.handle)
+			if err == nil {
+				err = finalErr
+			}
+		}()
+
+		handles, _, err := session.ctx.FindObjects(session.handle, maxHandlePerFind)
+		if err != nil {
+			return err
+		}
+		if len(handles) == 0 {
+			return nil
+		}
+
+		for _, handle := range handles {
+			attributes := []*pkcs11.Attribute{
+				pkcs11.NewAttribute(pkcs11.CKA_VALUE, 0),
+			}
+
+			if attributes, err = session.ctx.GetAttributeValue(session.handle, handle, attributes); err != nil {
+				return err
+			}
+
+			cert, err := x509.ParseCertificate(attributes[0].Value)
+			if err != nil {
+				return err
+			}
+			certs = append(certs, cert)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return certs, err
+}
+
 // ImportCertificate imports a certificate onto the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) ImportCertificate(id []byte, certificate *x509.Certificate) error {
