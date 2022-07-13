@@ -127,7 +127,6 @@ func testRsaSigningPKCS1v15(t *testing.T, key crypto.Signer, hashFunction crypto
 }
 
 func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash, native bool) {
-
 	if !native {
 		skipIfMechUnsupported(t, key.(*pkcs11PrivateKeyRSA).context, pkcs11.CKM_RSA_PKCS_PSS)
 	}
@@ -137,18 +136,24 @@ func testRsaSigningPSS(t *testing.T, key crypto.Signer, hashFunction crypto.Hash
 	_, err := h.Write(plaintext)
 	require.NoError(t, err)
 
-	plaintextHash := h.Sum([]byte{}) // weird API
-	pssOptions := &rsa.PSSOptions{
-		SaltLength: rsa.PSSSaltLengthEqualsHash,
-		Hash:       hashFunction,
-	}
-	sig, err := key.Sign(rand.Reader, plaintextHash, pssOptions)
-	require.NoError(t, err)
-
+	plaintextHash := h.Sum(nil)
 	rsaPubkey := key.Public().(crypto.PublicKey).(*rsa.PublicKey)
+	saltLengths := []int{
+		rsa.PSSSaltLengthAuto,
+		rsa.PSSSaltLengthEqualsHash,
+	}
 
-	err = rsa.VerifyPSS(rsaPubkey, hashFunction, plaintextHash, sig, pssOptions)
-	require.NoError(t, err)
+	for _, sl := range saltLengths {
+		pssOptions := &rsa.PSSOptions{
+			SaltLength: sl,
+			Hash:       hashFunction,
+		}
+		sig, err := key.Sign(rand.Reader, plaintextHash, pssOptions)
+		require.NoError(t, err)
+
+		err = rsa.VerifyPSS(rsaPubkey, hashFunction, plaintextHash, sig, pssOptions)
+		require.NoError(t, err)
+	}
 }
 
 func testRsaEncryption(t *testing.T, key crypto.Decrypter, native bool) {

@@ -251,11 +251,12 @@ func signPSS(session *pkcs11Session, key *pkcs11PrivateKeyRSA, digest []byte, op
 		return nil, err
 	}
 	switch opts.SaltLength {
-	case rsa.PSSSaltLengthAuto: // parseltongue constant
-		// TODO we could (in principle) work out the biggest
-		// possible size from the key, but until someone has
-		// the effort to do that...
-		return nil, errUnsupportedRSAOptions
+	case rsa.PSSSaltLengthAuto:
+		if k, ok := key.pkcs11PrivateKey.pubKey.(*rsa.PublicKey); ok {
+			sLen = uint(k.N.BitLen()-1+7)/8 - 2 - hLen
+		} else {
+			return nil, errUnsupportedRSAOptions
+		}
 	case rsa.PSSSaltLengthEqualsHash:
 		sLen = hLen
 	default:
