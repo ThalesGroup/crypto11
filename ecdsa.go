@@ -30,6 +30,7 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
@@ -83,6 +84,10 @@ var wellKnownCurves = map[string]curveInfo{
 	"P-256": {
 		mustMarshal(asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}),
 		elliptic.P256(),
+	},
+	"secp256k1": {
+		mustMarshal(asn1.ObjectIdentifier{1, 3, 132, 0, 10}),
+		secp256k1.S256(),
 	},
 	"P-384": {
 		mustMarshal(asn1.ObjectIdentifier{1, 3, 132, 0, 34}),

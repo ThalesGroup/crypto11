@@ -3,6 +3,7 @@ module github.com/ThalesIgnite/crypto11
 go 1.13
 
 require (
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/miekg/pkcs11 v1.0.3-0.20190429190417-a667d056470f
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.3.0
