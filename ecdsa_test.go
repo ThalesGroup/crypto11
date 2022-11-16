@@ -35,6 +35,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,6 +44,7 @@ var curves = []elliptic.Curve{
 	elliptic.P256(),
 	elliptic.P384(),
 	elliptic.P521(),
+	secp256k1.S256(),
 	// plus something with explicit parameters
 }
 
