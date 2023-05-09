@@ -611,3 +611,25 @@ func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *
 
 	return set[attribute], nil
 }
+
+// WithPKCS11Key provides a custom extension point that exposes the underlying PKCS#11 key handle and an active session to the
+// supplied callback. This can be used to e.g. extend this package non-intrusively and provide custom HSM interaction code.
+func (c *Context) WithPKCS11Key(key interface{}, f func(ctx *pkcs11.Ctx, sessionHandle pkcs11.SessionHandle, keyHandle pkcs11.ObjectHandle) error) error {
+	if c.closed.Get() {
+		return errClosed
+	}
+	var keyHandle pkcs11.ObjectHandle
+	switch k := (key).(type) {
+	case *pkcs11PrivateKeyDSA:
+		keyHandle = k.pubKeyHandle
+	case *pkcs11PrivateKeyRSA:
+		keyHandle = k.pubKeyHandle
+	case *pkcs11PrivateKeyECDSA:
+		keyHandle = k.pubKeyHandle
+	default:
+		return errors.Errorf("not a PKCS#11 secret or private key")
+	}
+	return c.withSession(func(session *pkcs11Session) error {
+		return f(session.ctx, session.handle, keyHandle)
+	})
+}

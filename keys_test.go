@@ -221,3 +221,20 @@ func TestGettingUnsupportedKeyTypeAttributes(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestWithKey(t *testing.T) {
+	withContext(t, func(ctx *Context) {
+		id := randomBytes()
+		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
+		require.NoError(t, err)
+
+		ctx.WithPKCS11Key(key, func(ctx *pkcs11.Ctx, sessionHandle pkcs11.SessionHandle, keyHandle pkcs11.ObjectHandle) error {
+			assert.NotNil(t, key)
+			// PKCS#11 2.20 spec: "Valid session handles and object handles in Cryptoki always have nonzero values."
+			assert.True(t, sessionHandle != 0)
+			// Verify the key's internal handle matches what is passed down.
+			assert.Equal(t, keyHandle, key.handle)
+			return nil
+		})
+	})
+}
