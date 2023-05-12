@@ -222,7 +222,7 @@ func TestGettingUnsupportedKeyTypeAttributes(t *testing.T) {
 	})
 }
 
-func TestWithKey(t *testing.T) {
+func TestWithPKCS11Key(t *testing.T) {
 	withContext(t, func(ctx *Context) {
 		id := randomBytes()
 		key, err := ctx.GenerateSecretKey(id, 128, CipherAES)
