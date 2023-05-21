@@ -24,35 +24,38 @@ package crypto11
 import (
 	"C"
 	"encoding/asn1"
+	"encoding/binary"
+	"math"
 	"math/big"
-	"unsafe"
 
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
 
+const uint64Sz = 8
+const uint32Sz = 4
+
+// **little-endian** order
 func ulongToBytes(n uint) []byte {
-	return C.GoBytes(unsafe.Pointer(&n), C.sizeof_ulong) // ugh!
+	if n > math.MaxUint32 {
+		bytes := make([]byte, uint64Sz)
+		binary.LittleEndian.PutUint64(bytes, uint64(n))
+		return bytes
+	}
+	bytes := make([]byte, uint32Sz)
+	binary.LittleEndian.PutUint32(bytes, uint32(n))
+	return bytes
 }
 
+// assuming **little-endian** storage order
 func bytesToUlong(bs []byte) (n uint) {
-	sliceSize := len(bs)
-	if sliceSize == 0 {
-		return 0
+	if len(bs) < uint64Sz {
+		placeholder := make([]byte, uint64Sz)
+		copy(placeholder, bs)
+		bs = placeholder
 	}
-
-	value := *(*uint)(unsafe.Pointer(&bs[0]))
-	if sliceSize > C.sizeof_ulong {
-		return value
-	}
-
-	// truncate the value to the # of bits present in the byte slice since
-	// the unsafe pointer will always grab/convert ULONG # of bytes
-	var mask uint
-	for i := 0; i < sliceSize; i++ {
-		mask |= 0xff << uint(i * 8)
-	}
-	return value & mask
+	nn := binary.LittleEndian.Uint64(bs)
+	return uint(nn)
 }
 
 func concat(slices ...[]byte) []byte {
