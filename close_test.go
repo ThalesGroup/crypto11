@@ -94,6 +94,7 @@ func TestErrorAfterClosed(t *testing.T) {
 	assert.Equal(t, errClosed, err)
 
 	err = ctx.ImportCertificateWithAttributes(NewAttributeSet(), cert)
+
 	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GetAttribute(nil, CkaLabel)

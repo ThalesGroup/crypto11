@@ -44,26 +44,29 @@ func TestHmac(t *testing.T) {
 		t.Skipf("HMAC not implemented on SoftHSM")
 	}
 	t.Run("HMACSHA1", func(t *testing.T) {
-		testHmac(t, ctx, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20, false)
+		testHmac(t, ctx, "hmac1", pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC, 0, 20, false)
 	})
 	t.Run("HMACSHA1General", func(t *testing.T) {
-		testHmac(t, ctx, pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10, true)
+		testHmac(t, ctx, "hmac1", pkcs11.CKK_SHA_1_HMAC, pkcs11.CKM_SHA_1_HMAC_GENERAL, 10, 10, true)
 	})
 	t.Run("HMACSHA256", func(t *testing.T) {
-		testHmac(t, ctx, pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
+		testHmac(t, ctx, "hmac0", pkcs11.CKK_SHA256_HMAC, pkcs11.CKM_SHA256_HMAC, 0, 32, false)
 	})
 
 }
 
-func testHmac(t *testing.T, ctx *Context, keytype int, mech int, length int, xlength int, full bool) {
+func testHmac(t *testing.T, ctx *Context, keyLabel string, keytype int, mech int, length int, xlength int, full bool) {
 
 	skipIfMechUnsupported(t, ctx, uint(mech))
 
-	id := randomBytes()
-	key, err := ctx.GenerateSecretKey(id, 256, Ciphers[keytype])
+	key, found, err := findKeyOrCreate(ctx, keyLabel, keytype, 256)
 	require.NoError(t, err)
 	require.NotNil(t, key)
-	defer key.Delete()
+	if ! found {
+		// so it was created
+		defer key.Delete()
+	}
+
 
 	t.Run("Short", func(t *testing.T) {
 		input := []byte("a short string")

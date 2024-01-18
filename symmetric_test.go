@@ -62,21 +62,10 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Block", func(t *testing.T) {
-		skipIfMechUnsupported(t, key.context, key.Cipher.ECBMech)
-		testSymmetricBlock(t, key, key2)
-	})
-
-	iv := make([]byte, key.BlockSize())
+	iv := make([]byte, key.Cipher.BlockSize)
 	for i := range iv {
 		iv[i] = 0xF0
 	}
-
-	t.Run("CBC", func(t *testing.T) {
-		// By using cipher.NewCBCEncrypter, this test will actually use ECB mode on the key.
-		skipIfMechUnsupported(t, key2.context, key2.Cipher.ECBMech)
-		testSymmetricMode(t, cipher.NewCBCEncrypter(key2, iv), cipher.NewCBCDecrypter(key2, iv))
-	})
 
 	t.Run("CBCClose", func(t *testing.T) {
 		skipIfMechUnsupported(t, key2.context, key2.Cipher.CBCMech)
@@ -104,20 +93,9 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 		runtime.GC()
 	})
 
-	t.Run("CBCSealOpen", func(t *testing.T) {
-		aead, err := key2.NewCBC(PaddingNone)
-		require.NoError(t, err)
-		testAEADMode(t, aead, 128, 0)
-	})
-
-	t.Run("CBCPKCSSealOpen", func(t *testing.T) {
-		aead, err := key2.NewCBC(PaddingPKCS)
-		require.NoError(t, err)
-		testAEADMode(t, aead, 127, 0)
-	})
 	if bits == 128 {
 		t.Run("GCMSoft", func(t *testing.T) {
-			aead, err := cipher.NewGCM(key2)
+			aead, err := key2.NewGCM()
 			require.NoError(t, err)
 			testAEADMode(t, aead, 127, 129)
 		})
@@ -133,63 +111,6 @@ func testHardSymmetric(t *testing.T, ctx *Context, keytype int, bits int) {
 	// TODO OFB
 	// TODO CTR
 
-}
-
-func testSymmetricBlock(t *testing.T, encryptKey cipher.Block, decryptKey cipher.Block) {
-	// The functions in cipher.Block have no error returns, so they panic if they encounter
-	// a problem. We catch these panics here, so the test can fail nicely
-	defer func() {
-		if cause := recover(); cause != nil {
-			t.Fatalf("Caught panic: %q", cause)
-		}
-	}()
-
-	b := encryptKey.BlockSize()
-	input := make([]byte, 3*b)
-	middle := make([]byte, 3*b)
-	output := make([]byte, 3*b)
-	// Set a recognizable pattern in the buffers
-	for i := 0; i < 3*b; i++ {
-		input[i] = byte(i)
-		middle[i] = byte(i + 3*b)
-		output[i] = byte(i + 6*b)
-	}
-	encryptKey.Encrypt(middle, input) // middle[:b] = encrypt(input[:b])
-	if bytes.Equal(input[:b], middle[:b]) {
-		t.Errorf("crypto11.PKCSSecretKey.Encrypt: identity transformation")
-		return
-	}
-	matches := 0
-	for i := 0; i < b; i++ {
-		if middle[i] == byte(i+3*b) {
-			matches++
-		}
-	}
-	if matches == b {
-		t.Errorf("crypto11.PKCSSecretKey.Encrypt: didn't modify destination")
-		return
-	}
-	for i := 0; i < 3*b; i++ {
-		if input[i] != byte(i) {
-			t.Errorf("crypto11.PKCSSecretKey.Encrypt: corrupted source")
-			return
-		}
-		if i >= b && middle[i] != byte(i+3*b) {
-			t.Errorf("crypto11.PKCSSecretKey.Encrypt: corrupted destination past blocksize")
-			return
-		}
-	}
-	decryptKey.Decrypt(output, middle) // output[:b] = decrypt(middle[:b])
-	if !bytes.Equal(input[:b], output[:b]) {
-		t.Errorf("crypto11.PKCSSecretKey.Decrypt: plaintext wrong")
-		return
-	}
-	for i := 0; i < 3*b; i++ {
-		if i >= b && output[i] != byte(i+6*b) {
-			t.Errorf("crypto11.PKCSSecretKey.Decrypt: corrupted destination past blocksize")
-			return
-		}
-	}
 }
 
 func testSymmetricMode(t *testing.T, encrypt cipher.BlockMode, decrypt cipher.BlockMode) {
@@ -288,12 +209,13 @@ func BenchmarkCBC(b *testing.B) {
 	plaintext := make([]byte, 65536)
 	ciphertext := make([]byte, 65536)
 
-	b.Run("Native", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			mode := cipher.NewCBCEncrypter(key, iv)
-			mode.CryptBlocks(ciphertext, plaintext)
-		}
-	})
+	// No longer supported
+	//b.Run("Native", func(b *testing.B) {
+	//	for i := 0; i < b.N; i++ {
+	//		mode := cipher.NewCBCEncrypter(key, iv)
+	//		mode.CryptBlocks(ciphertext, plaintext)
+	//	}
+	//})
 
 	b.Run("IdiomaticClose", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
