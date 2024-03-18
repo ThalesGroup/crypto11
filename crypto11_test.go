@@ -1,4 +1,4 @@
-// Copyright 2016, 2017 Thales e-Security, Inc
+// Copyright 2024 Thales Group
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -269,6 +269,7 @@ func TestNoLogin(t *testing.T) {
 	ctx, err := Configure(cfg)
 	require.NoError(t, err)
 
+	//_, err = ctx.getSession()
 	_, err = ctx.GenerateSecretKey(randomBytes(), 256, CipherAES)
 	require.Error(t, err)
 
@@ -287,12 +288,7 @@ func TestInvalidMaxSessions(t *testing.T) {
 	require.Error(t, err)
 }
 
-// randomBytes returns 32 random bytes.
-func randomBytes() []byte {
-	result := make([]byte, 32)
-	rand.Read(result)
-	return result
-}
+
 
 func init() {
 	rand.Seed(time.Now().UnixNano())

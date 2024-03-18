@@ -1,4 +1,4 @@
-// Copyright 2016, 2017 Thales e-Security, Inc
+// Copyright 2024 Thales Group
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -229,18 +229,6 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 	require.NoError(t, err)
 
 	require.Equal(t, plaintext, decrypted)
-}
-
-func skipIfMechUnsupported(t *testing.T, ctx *Context, wantMech uint) {
-	mechs, err := ctx.ctx.GetMechanismList(ctx.slot)
-	require.NoError(t, err)
-
-	for _, mech := range mechs {
-		if mech.Mechanism == wantMech {
-			return
-		}
-	}
-	t.Skipf("mechanism 0x%x not supported", wantMech)
 }
 
 func TestRsaRequiredArgs(t *testing.T) {

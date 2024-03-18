@@ -1,4 +1,4 @@
-// Copyright 2018 Thales e-Security, Inc
+// Copyright 2024 Thales Group
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -94,6 +94,7 @@ func TestErrorAfterClosed(t *testing.T) {
 	assert.Equal(t, errClosed, err)
 
 	err = ctx.ImportCertificateWithAttributes(NewAttributeSet(), cert)
+
 	assert.Equal(t, errClosed, err)
 
 	_, err = ctx.GetAttribute(nil, CkaLabel)

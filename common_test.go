@@ -1,8 +1,32 @@
 package crypto11
 
 import (
+	"crypto/rand"
+	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
+
+
+
+func skipIfMechUnsupported(t *testing.T, ctx *Context, wantMech uint) {
+	mechs, err := ctx.ctx.GetMechanismList(ctx.slot)
+	require.NoError(t, err)
+
+	for _, mech := range mechs {
+		if mech.Mechanism == wantMech {
+			return
+		}
+	}
+	t.Skipf("mechanism 0x%x not supported", wantMech)
+}
+
+// randomBytes returns 32 random bytes.
+func randomBytes() []byte {
+	result := make([]byte, 32)
+	rand.Read(result)
+	return result
+}
 
 func TestULongMasking(t *testing.T) {
 	ulongData := uint(0x33221100ddccbbaa)
@@ -34,3 +58,32 @@ func TestULongMasking(t *testing.T) {
 		}
 	}
 }
+
+func makeIV(cipher *SymmetricCipher) ([]byte, error) {
+	iv := make([]byte, cipher.BlockSize)
+	_, err := rand.Read(iv)
+	return iv, err
+}
+
+func createKey(ctx *Context, keyLabel string, keySize int, KeyType int)(key *SecretKey, err error){
+	id := make([]byte, 16)
+	rand.Read(id)
+	if key, err = ctx.GenerateSecretKeyWithLabel(id, []byte(keyLabel), keySize, Ciphers[KeyType]); err != nil {
+		return nil, fmt.Errorf("error generating key with label '%s': %v", keyLabel, err)
+	}
+	return key, nil
+}
+
+// findKeyOrCreate returns the key if found in the KMS
+// Otherwise, it creates the key in the KMS
+// Also returns a boolean to inform if the key was found. Returns 'false' if the key was not found
+func findKeyOrCreate(ctx *Context, keyLabel string, keyTypeCreation int, keySizeCreation int) (key *SecretKey, found bool, err error) {
+	if key, err = ctx.FindKey(nil, []byte(keyLabel)); key == nil {
+		found = false
+		key, err = createKey(ctx, keyLabel, keySizeCreation, keyTypeCreation)
+	} else{
+		found = true
+	}
+	return key, found, err
+}
+

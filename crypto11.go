@@ -1,4 +1,4 @@
-// Copyright 2016 Thales e-Security, Inc
+// Copyright 2024 Thales Group
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -142,7 +142,7 @@ func (o *pkcs11Object) Delete() error {
 type pkcs11PrivateKey struct {
 	pkcs11Object
 
-	// pubKeyHandle is a handle to the public key.
+	// pubKeyHandle is a keyHandle to the public key.
 	pubKeyHandle pkcs11.ObjectHandle
 
 	// pubKey is an exported copy of the public key. We pre-export the key material because crypto.Signer.Public
@@ -283,7 +283,7 @@ var refCountMutex = sync.Mutex{}
 
 // Configure creates a new Context based on the supplied PKCS#11 configuration.
 func Configure(config *Config) (*Context, error) {
-	// Have we been given exactly one way to select a token?
+	// Check for exactly one way to select a token
 	var fields []string
 	if config.SlotNumber != nil {
 		fields = append(fields, "slot number")
@@ -444,7 +444,7 @@ func loadConfigFromFile(configLocation string) (*Config, error) {
 	configDecoder := json.NewDecoder(file)
 	config := &Config{}
 	err = configDecoder.Decode(config)
-	return config, errors.WithMessage(err, "could decode config file:")
+	return config, errors.WithMessage(err, "could not decode config file:")
 }
 
 // Close releases resources used by the Context and unloads the PKCS #11 library if there are no other
