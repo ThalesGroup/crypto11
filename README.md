@@ -61,6 +61,17 @@ A minimal configuration file looks like this:
 - `Pin` is the password for the `CKU_USER` user.
 - `UseGCMIVFromHSM` generates the IV for GCM mechanism from the HSM
 
+Build
+=====
+
+This package is using CGo for cryptographic packages.  
+Enable CGo before building Crypto11 :
+
+```sh
+go env -w CGO_ENABLED=1
+go build
+```
+
 Testing Guidance
 ================
 
