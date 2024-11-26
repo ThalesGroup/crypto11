@@ -29,6 +29,7 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/miekg/pkcs11"
@@ -95,6 +96,11 @@ func TestHardRSA(t *testing.T) {
 			t.SkipNow()
 		}
 		testRsaSigning(t, key3.(crypto.Signer), false)
+	})
+	t.Run("FindPrivateKey", func(t *testing.T) {
+		key2, err = ctx.FindRSAPrivateKey(id, nil)
+		require.NoError(t, err)
+		assert.NotNil(t, key2)
 	})
 }
 

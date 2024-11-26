@@ -199,6 +199,32 @@ type SignerDecrypter interface {
 	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
 }
 
+// PrivateKey is a dedicated interface for signing operations using a private key only, without the
+// need of specifying a public Key.
+// Despite being very similar to Signer, PrivateKey does not include the  method to return the
+// public key from the private key.
+// One usecase implemented by PrivateKey is a pkcs11 store protecting a private key without its
+// public pair.
+type PrivateKey interface {
+	Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error)
+
+	KeyType() uint
+}
+
+// RSAPrivateKey is a dedicated interface for signing operations or decryption operations using an
+// RSA private key only, without the need of specifying a public Key.
+// Despite being very similar to SignerDecrypter, RSAPrivateKey does not include the  method to
+// return the public key from the private key.
+// One usecase implemented by RSAPrivateKey is a pkcs11 store protecting a private key without its
+// public pair.
+type RSAPrivateKey interface {
+	Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error)
+
+	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
+
+	KeyType() uint
+}
+
 // findToken finds a token given exactly one of serial, label or slotNumber
 func (c *Context) findToken(slots []uint, serial, label string, slotNumber *int) (uint, *pkcs11.TokenInfo, error) {
 	for _, slot := range slots {

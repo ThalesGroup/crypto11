@@ -90,7 +90,7 @@ Unit test on one file
 ---------
 
 ```sh
-export DEPENDENCIES="rand.go attributes.go hmac.go block.go crypto11.go common.go keys.go blockmode_cmd.go rsa.go certificates.go ecdsa.go blockmode.go sessions.go aead.go dsa.go symmetric.go common_test.go"
+export DEPENDENCIES="rand.go attributes.go hmac.go crypto11.go common.go keys.go rsa.go certificates.go ecdsa.go blockmode.go sessions.go aead.go dsa.go symmetric.go common_test.go"
 go test block_test.go $DEPENDENCIES
 ```
 
