@@ -97,6 +97,13 @@ func TestHardRSA(t *testing.T) {
 		}
 		testRsaSigning(t, key3.(crypto.Signer), false)
 	})
+	// test methods for RSA key pairs only
+	t.Run("FindRSAKeyPair", func(t *testing.T) {
+		key2, err = ctx.FindRSAKeyPair(id, nil)
+		require.NoError(t, err)
+		assert.NotNil(t, key2)
+	})
+	// test methods for RSA private key only
 	t.Run("FindPrivateKey", func(t *testing.T) {
 		key2, err = ctx.FindRSAPrivateKey(id, nil)
 		require.NoError(t, err)
