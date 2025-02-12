@@ -50,7 +50,7 @@ func bytesToUlong(bs []byte) (n uint) {
 	// the unsafe pointer will always grab/convert ULONG # of bytes
 	var mask uint
 	for i := 0; i < sliceSize; i++ {
-		mask |= 0xff << uint(i * 8)
+		mask |= 0xff << uint(i*8)
 	}
 	return value & mask
 }
