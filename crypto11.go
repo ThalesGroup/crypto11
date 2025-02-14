@@ -276,28 +276,30 @@ type GCMIVFromHSMConfig struct {
 	SupplyIvForHSMGCMDecrypt bool
 }
 
-// refCount holds the different contexts using a particular P11 library. It must not be read or modified
-// without holding refCountMutex.
-var refCount = map[string]moduleSlot{}
-var refCountMutex = sync.Mutex{}
+// moduleReferences holds the different contexts using a particular P11 library. It must not be read or modified
+// without holding moduleReferencesMutex.
+var moduleReferences = map[string]moduleRef{}
+var moduleReferencesMutex = sync.Mutex{}
 
-type moduleSlot struct {
-	module   moduleCtx
+// Specific moduleRef with its context and reference count.
+type moduleRef struct {
+	ctx      moduleCtx
 	refCount int
 }
 
+// Creates new context or returns an existing one if one has been already created.
 func openModule(path string) (moduleCtx, error) {
-	refCountMutex.Lock()
-	defer refCountMutex.Unlock()
+	moduleReferencesMutex.Lock()
+	defer moduleReferencesMutex.Unlock()
 
-	if slot, ok := refCount[path]; ok {
-		refCnt := slot.refCount
-		refCount[path] = moduleSlot{
-			module:   slot.module,
-			refCount: refCnt + 1,
+	if mod, ok := moduleReferences[path]; ok {
+		// Module with given path has been already initialized.
+		moduleReferences[path] = moduleRef{
+			ctx:      mod.ctx,
+			refCount: mod.refCount + 1,
 		}
 
-		return slot.module, nil
+		return mod.ctx, nil
 	}
 
 	ctx := pkcs11.New(path)
@@ -310,46 +312,52 @@ func openModule(path string) (moduleCtx, error) {
 		return moduleCtx{}, fmt.Errorf("failed to initialize module: %w", err)
 	}
 
-	module := moduleCtx{ctx}
-	refCount[path] = moduleSlot{
-		module:   module,
+	modCtx := moduleCtx{ctx}
+	moduleReferences[path] = moduleRef{
+		ctx:      modCtx,
 		refCount: 1,
 	}
-	return module, nil
+	return modCtx, nil
 }
 
+// Context to a specific module. Users of the module all share the same context.
 type moduleCtx struct {
 	*pkcs11.Ctx
 }
 
-func (m moduleCtx) Close() {
-	refCountMutex.Lock()
-	defer refCountMutex.Unlock()
+// Close drops reference to its associated module and does cleanup if it is the last reference.
+func (mc moduleCtx) Close() {
+	moduleReferencesMutex.Lock()
+	defer moduleReferencesMutex.Unlock()
 
 	var path string
-	var slot moduleSlot
-	for p, s := range refCount {
-		if s.module == m {
+	var mod moduleRef
+	for p, ref := range moduleReferences {
+		if ref.ctx == mc {
 			path = p
-			slot = s
+			mod = ref
 			break
 		}
 	}
 	if path == "" {
-		return
+		// Instance has already been destroyed even though we are holding a reference.
+		panic("referenced module not found")
 	}
-	if slot.refCount < 1 {
+	if mod.refCount < 1 {
+		// Reference count has lost count of the number of actual references.
 		panic("invalid reference count for PKCS#11 library")
 	}
 
-	if slot.refCount == 1 {
-		_ = m.Finalize()
-		m.Destroy()
-		delete(refCount, path)
+	if mod.refCount == 1 {
+		// Do cleanup as last reference.
+		_ = mc.Finalize()
+		mc.Destroy()
+		delete(moduleReferences, path)
 	} else {
-		refCount[path] = moduleSlot{
-			module:   slot.module,
-			refCount: slot.refCount - 1,
+		// Decrement reference count.
+		moduleReferences[path] = moduleRef{
+			ctx:      mod.ctx,
+			refCount: mod.refCount - 1,
 		}
 	}
 }
@@ -513,6 +521,8 @@ func (c *Context) Close() error {
 	// since we plan to kill our collection to the library anyway.
 	_ = c.ctx.CloseSession(c.persistentSession)
 
+	// Drop reference to the held context. May destroy the module instance
+	// if this is the last reference to it.
 	c.ctx.Close()
 
 	return nil
