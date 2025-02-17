@@ -72,6 +72,10 @@ func notNilBytes(obj []byte, name string) error {
 	return nil
 }
 
+func (k *pkcs11PrivateKeyDSA) KeyType() uint {
+	return pkcs11.CKK_DSA
+}
+
 // GenerateDSAKeyPair creates a DSA key pair on the token. The id parameter is used to
 // set CKA_ID and must be non-nil.
 func (c *Context) GenerateDSAKeyPair(id []byte, params *dsa.Parameters) (Signer, error) {

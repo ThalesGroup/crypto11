@@ -24,6 +24,7 @@ package crypto11
 import (
 	"crypto"
 	"crypto/x509"
+	"fmt"
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
@@ -103,27 +104,32 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 	return &handles[0], nil
 }
 
-// Takes a handles to the private half of a keypair, locates the public half with the matching CKA_ID and CKA_LABEL
-// values and constructs a keypair object from them both.
-func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (signer Signer, certificate *x509.Certificate, err error) {
+func (c *Context) getKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (pubHandle *pkcs11.ObjectHandle, keyType uint, priv *pkcs11PrivateKey, certificate *x509.Certificate, pub crypto.PublicKey, err error){
 	attributes := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
 	}
 	if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
-		return nil, nil, err
+		return nil, 0, nil, nil, nil, err
 	}
+
+
+	// Attributes must contain the key id or the key label to find it inside the keystore.
+	//if id == nil || len(id) == 0 {
+	//	return nil, 0, nil, nil, nil, errNoCkaId
+	//}
+	// Attributes must contain the key id or the key label to find it inside the keystore.
+	//if id == nil || len(id) == 0 {
+	//	return nil, 0, nil, nil, nil, errNoCkaId
+	//}
 	id := attributes[0].Value
 	label := attributes[1].Value
-	keyType := bytesToUlong(attributes[2].Value)
-
-	// Ensure the private key actually has a non-empty CKA_ID to match on
-	if id == nil || len(id) == 0 {
-		return nil, nil, errNoCkaId
+	keyType = bytesToUlong(attributes[2].Value)
+	if id == nil && label == nil {
+		return nil, 0, nil, nil, nil, fmt.Errorf("key id or label must be provided")
 	}
 
-	var pubHandle *pkcs11.ObjectHandle
 
 	// Find the public half which has a matching CKA_ID
 	pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
@@ -137,14 +143,14 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 
 			pubHandles, err := findKeys(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 			if err != nil {
-				return nil, nil, err
+				return nil, 0, nil, nil, nil, err
 			}
 
 			for _, handle := range pubHandles {
 				template := []*pkcs11.Attribute{pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil)}
 				template, err = session.ctx.GetAttributeValue(session.handle, handle, template)
 				if err != nil {
-					return nil, nil, err
+					return nil, 0, nil, nil, nil, err
 				}
 				if len(template[0].Value) == 0 {
 					pubHandle = &handle
@@ -152,7 +158,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 				}
 			}
 		} else {
-			return nil, nil, err
+			return nil, 0, nil, nil, nil, err
 		}
 	}
 
@@ -161,14 +167,13 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 		pubHandle, err = findKey(session, id, nil, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
 	}
 
-	resultPkcs11PrivateKey := pkcs11PrivateKey{
+	priv = &pkcs11PrivateKey{
 		pkcs11Object: pkcs11Object{
 			handle:  *privHandle,
 			context: c,
 		},
 	}
 
-	var pub crypto.PublicKey
 	certificate, _ = findCertificate(session, id, nil, nil)
 	if certificate != nil && pubHandle == nil {
 		pub = certificate.PublicKey
@@ -176,12 +181,23 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 
 	if pub == nil && pubHandle == nil {
 		// We can't return a Signer if we don't have private and public key. Treat it as an error.
-		return nil, nil, errNoPublicHalf
+		return nil, 0, nil, nil, nil, errNoPublicHalf
+	}
+
+	return
+}
+
+// Takes a handles to the private half of a keypair, locates the public half with the matching CKA_ID and CKA_LABEL
+// values and constructs a keypair object from them both.
+func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (signer Signer, certificate *x509.Certificate, err error) {
+	pubHandle, keyType, resultPkcs11PrivateKey, certificate, pub, err := c.getKeyPair(session, privHandle)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	switch keyType {
 	case pkcs11.CKK_DSA:
-		result := &pkcs11PrivateKeyDSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		result := &pkcs11PrivateKeyDSA{pkcs11PrivateKey: *resultPkcs11PrivateKey}
 		if pubHandle != nil {
 			if pub, err = exportDSAPublicKey(session, *pubHandle); err != nil {
 				return nil, nil, err
@@ -193,7 +209,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 		return result, certificate, nil
 
 	case pkcs11.CKK_RSA:
-		result := &pkcs11PrivateKeyRSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		result := &pkcs11PrivateKeyRSA{pkcs11PrivateKey: *resultPkcs11PrivateKey}
 		if pubHandle != nil {
 			if pub, err = exportRSAPublicKey(session, *pubHandle); err != nil {
 				return nil, nil, err
@@ -205,7 +221,7 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 		return result, certificate, nil
 
 	case pkcs11.CKK_ECDSA:
-		result := &pkcs11PrivateKeyECDSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		result := &pkcs11PrivateKeyECDSA{pkcs11PrivateKey: *resultPkcs11PrivateKey}
 		if pubHandle != nil {
 			if pub, err = exportECDSAPublicKey(session, *pubHandle); err != nil {
 				return nil, nil, err
@@ -495,13 +511,162 @@ func (c *Context) FindKeysWithAttributes(attributes AttributeSet) ([]*SecretKey,
 	return keys, nil
 }
 
-// FindAllKeyPairs retrieves all existing symmetric keys, or a nil slice if none can be found.
+// FindAllKeys retrieves all existing symmetric keys, or a nil slice if none can be found.
 func (c *Context) FindAllKeys() ([]*SecretKey, error) {
 	if c.closed.Get() {
 		return nil, errClosed
 	}
 
 	return c.FindKeysWithAttributes(NewAttributeSet())
+}
+
+// Takes a handles to the private half of a keypair.
+func (c *Context) makePrivateKey(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (signer PrivateKey, err error) {
+	attributes := []*pkcs11.Attribute{
+		pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, 0),
+	}
+	if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
+		return nil, err
+	}
+	keyType := bytesToUlong(attributes[0].Value)
+
+	resultPkcs11PrivateKey := pkcs11PrivateKey{
+		pkcs11Object: pkcs11Object{
+			handle:  *privHandle,
+			context: c,
+		},
+	}
+
+	switch keyType {
+	case pkcs11.CKK_DSA:
+		result := &pkcs11PrivateKeyDSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		return result, nil
+
+	case pkcs11.CKK_RSA:
+		result := &pkcs11PrivateKeyRSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		return result, nil
+
+	case pkcs11.CKK_ECDSA:
+		result := &pkcs11PrivateKeyECDSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		return result, nil
+
+	default:
+		return nil, errors.Errorf("unsupported key type: %X", keyType)
+	}
+}
+
+// FindPrivateKey retrieves a previously created asymmetric private key, or nil if it cannot be found.
+//
+// At least one of id and label must be specified.
+func (c *Context) FindPrivateKey(id []byte, label []byte) (PrivateKey, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	result, err := c.FindPrivateKeys(id, label)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result[0], nil
+}
+
+// FindPrivateKeys retrieves all matching asymmetric private keys, or a nil slice if none can be found.
+//
+// At least one of id and label must be specified.
+func (c *Context) FindPrivateKeys(id []byte, label []byte) (signer []PrivateKey, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	if id == nil && label == nil {
+		return nil, errors.New("id and label cannot both be nil")
+	}
+
+	attributes := NewAttributeSet()
+
+	if id != nil {
+		err = attributes.Set(CkaId, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if label != nil {
+		err = attributes.Set(CkaLabel, label)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return c.FindPrivateKeysWithAttributes(attributes)
+}
+
+// FindPrivateKeyWithAttributes retrieves a previously created asymmetric private keys, or nil if it cannot be found.
+// The given attributes are matched against the private half only.
+func (c *Context) FindPrivateKeyWithAttributes(attributes AttributeSet) (PrivateKey, error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	result, err := c.FindPrivateKeysWithAttributes(attributes)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result[0], nil
+}
+
+// FindPrivateKeysWithAttributes retrieves previously created asymmetric private keys, or nil if none can be found.
+// The given attributes are matched against the private half only.
+func (c *Context) FindPrivateKeysWithAttributes(attributes AttributeSet) (signer []PrivateKey, err error) {
+	if c.closed.Get() {
+		return nil, errClosed
+	}
+
+	var keys []PrivateKey
+
+	if _, ok := attributes[CkaClass]; ok {
+		return nil, errors.Errorf("keypair attribute set must not contain CkaClass")
+	}
+
+	err = c.withSession(func(session *pkcs11Session) error {
+		// Add the private key class to the template to find the private half
+		privAttributes := attributes.Copy()
+		err = privAttributes.Set(CkaClass, pkcs11.CKO_PRIVATE_KEY)
+		if err != nil {
+			return err
+		}
+
+		privHandles, err := findKeysWithAttributes(session, privAttributes.ToSlice())
+		if err != nil {
+			return err
+		}
+
+		for _, privHandle := range privHandles {
+			k, err := c.makePrivateKey(session, &privHandle)
+			if err != nil {
+				return err
+			}
+
+			keys = append(keys, k)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return keys, nil
 }
 
 func uintPtr(i uint) *uint { return &i }
@@ -611,3 +776,6 @@ func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *
 
 	return set[attribute], nil
 }
+
+
+

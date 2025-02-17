@@ -54,6 +54,10 @@ type curveInfo struct {
 	curve elliptic.Curve
 }
 
+func (k *pkcs11PrivateKeyECDSA) KeyType() uint {
+	return pkcs11.CKK_ECDSA
+}
+
 // ASN.1 marshal some value and panic on error
 func mustMarshal(val interface{}) []byte {
 	if b, err := asn1.Marshal(val); err != nil {
