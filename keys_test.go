@@ -36,6 +36,12 @@ func TestFindKeysRequiresIdOrLabel(t *testing.T) {
 
 		_, err = ctx.FindKeyPairs(nil, nil)
 		assert.Error(t, err)
+
+		_, err = ctx.FindPrivateKey(nil, nil)
+		assert.Error(t, err)
+
+		_, err = ctx.FindPrivateKeys(nil, nil)
+		assert.Error(t, err)
 	})
 }
 
@@ -120,6 +126,46 @@ func TestFindingKeyPairsWithAttributes(t *testing.T) {
 		attrs = NewAttributeSet()
 		_ = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
 		keys, err = ctx.FindKeyPairsWithAttributes(attrs)
+		require.NoError(t, err)
+		require.Len(t, keys, 3)
+	})
+}
+
+func TestFindingPrivateKeysWithAttributes(t *testing.T) {
+	withContext(t, func(ctx *Context) {
+
+		// Note: we use common labels, not IDs in this test code. AWS CloudHSM
+		// does not accept two keys with the same ID.
+
+		label := randomBytes()
+		label2 := randomBytes()
+
+		key, err := ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label, rsaSize)
+		require.NoError(t, err)
+		defer func(k Signer) { _ = k.Delete() }(key)
+
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
+		require.NoError(t, err)
+		defer func(k Signer) { _ = k.Delete() }(key)
+
+		key, err = ctx.GenerateRSAKeyPairWithLabel(randomBytes(), label2, rsaSize)
+		require.NoError(t, err)
+		defer func(k Signer) { _ = k.Delete() }(key)
+
+		attrs := NewAttributeSet()
+		_ = attrs.Set(CkaLabel, label)
+		keys, err := ctx.FindPrivateKeysWithAttributes(attrs)
+		require.NoError(t, err)
+		require.Len(t, keys, 1)
+
+		_ = attrs.Set(CkaLabel, label2)
+		keys, err = ctx.FindPrivateKeysWithAttributes(attrs)
+		require.NoError(t, err)
+		require.Len(t, keys, 2)
+
+		attrs = NewAttributeSet()
+		_ = attrs.Set(CkaKeyType, pkcs11.CKK_RSA)
+		keys, err = ctx.FindPrivateKeysWithAttributes(attrs)
 		require.NoError(t, err)
 		require.Len(t, keys, 3)
 	})
