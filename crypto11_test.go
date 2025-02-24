@@ -279,6 +279,33 @@ func TestNoLogin(t *testing.T) {
 	assert.Equal(t, pkcs11.Error(pkcs11.CKR_USER_NOT_LOGGED_IN), p11Err)
 }
 
+func TestInvalidPinDoesntDestroyLibrary(t *testing.T) {
+	cfg, err := getConfig("config")
+	require.NoError(t, err)
+	cfg.TokenLabel = "token1"
+
+	cfg_wrong_pin, err := getConfig("config")
+	require.NoError(t, err)
+	cfg_wrong_pin.Pin = "this_should_be_wrong_pin"
+	cfg.TokenLabel = "token2"
+
+	// Configure context with valid configuration.
+	ctx1, err := Configure(cfg)
+	require.NoError(t, err)
+
+	// Try to configure context with invalid pin in configuration.
+	_, err = Configure(cfg_wrong_pin)
+	require.EqualError(t, err, "failed to log into long term session: pkcs11: 0xA0: CKR_PIN_INCORRECT")
+
+	// Existing context should continue to work.
+	_, err = ctx1.FindAllKeys()
+	require.NoError(t, err)
+
+	// Configuring new contexts should continue to work.
+	_, err = Configure(cfg)
+	require.NoError(t, err)
+}
+
 func TestInvalidMaxSessions(t *testing.T) {
 	cfg, err := getConfig("config")
 	require.NoError(t, err)
@@ -287,8 +314,6 @@ func TestInvalidMaxSessions(t *testing.T) {
 	_, err = Configure(cfg)
 	require.Error(t, err)
 }
-
-
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
