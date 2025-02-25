@@ -22,6 +22,7 @@
 package crypto11
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
@@ -41,7 +42,7 @@ func findCertificate(session *pkcs11Session, id []byte, label []byte, serial *bi
 	}
 
 	if rawCertificate != nil {
-		cert, err = x509.ParseCertificate(rawCertificate)
+		cert, err = x509.ParseCertificate(bytes.Trim(rawCertificate, "\x00"))
 		if err != nil {
 			return nil, err
 		}
