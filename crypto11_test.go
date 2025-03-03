@@ -287,7 +287,7 @@ func TestInvalidPinDoesntDestroyLibrary(t *testing.T) {
 	cfg_wrong_pin, err := getConfig("config")
 	require.NoError(t, err)
 	cfg_wrong_pin.Pin = "this_should_be_wrong_pin"
-	cfg.TokenLabel = "token2"
+	cfg_wrong_pin.TokenLabel = "token2"
 
 	// Configure context with valid configuration.
 	ctx1, err := Configure(cfg)
