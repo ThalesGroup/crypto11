@@ -1,6 +1,6 @@
 module github.com/ThalesGroup/crypto11
 
-go 1.23.9
+go 1.24.5
 
 require (
 	github.com/miekg/pkcs11 v1.1.1
