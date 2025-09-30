@@ -25,6 +25,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"fmt"
+
 	"github.com/miekg/pkcs11"
 	"github.com/pkg/errors"
 )
@@ -76,10 +77,10 @@ func findKeys(session *pkcs11Session, id []byte, label []byte, keyclass *uint, k
 	if keytype != nil {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_KEY_TYPE, *keytype))
 	}
-	if id != nil {
+	if len(id) > 0 {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_ID, id))
 	}
-	if label != nil {
+	if len(label) > 0 {
 		template = append(template, pkcs11.NewAttribute(pkcs11.CKA_LABEL, label))
 	}
 
@@ -104,7 +105,7 @@ func findKey(session *pkcs11Session, id []byte, label []byte, keyclass *uint, ke
 	return &handles[0], nil
 }
 
-func (c *Context) getKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (pubHandle *pkcs11.ObjectHandle, keyType uint, priv *pkcs11PrivateKey, certificate *x509.Certificate, pub crypto.PublicKey, err error){
+func (c *Context) getKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHandle) (pubHandle *pkcs11.ObjectHandle, keyType uint, priv *pkcs11PrivateKey, certificate *x509.Certificate, pub crypto.PublicKey, err error) {
 	attributes := []*pkcs11.Attribute{
 		pkcs11.NewAttribute(pkcs11.CKA_ID, nil),
 		pkcs11.NewAttribute(pkcs11.CKA_LABEL, nil),
@@ -113,7 +114,6 @@ func (c *Context) getKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHa
 	if attributes, err = session.ctx.GetAttributeValue(session.handle, *privHandle, attributes); err != nil {
 		return nil, 0, nil, nil, nil, err
 	}
-
 
 	// Attributes must contain the key id or the key label to find it inside the keystore.
 	//if id == nil || len(id) == 0 {
@@ -126,10 +126,9 @@ func (c *Context) getKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectHa
 	id := attributes[0].Value
 	label := attributes[1].Value
 	keyType = bytesToUlong(attributes[2].Value)
-	if id == nil && label == nil {
-		return nil, 0, nil, nil, nil, fmt.Errorf("key id or label must be provided")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, 0, nil, nil, nil, fmt.Errorf("key id or label cannot both be empty")
 	}
-
 
 	// Find the public half which has a matching CKA_ID
 	pubHandle, err = findKey(session, id, label, uintPtr(pkcs11.CKO_PUBLIC_KEY), &keyType)
@@ -254,7 +253,7 @@ func (c *Context) FindKeyPair(id []byte, label []byte) (Signer, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("key pair with id=%x and label=%x was not found or is empty", id, label)
 	}
 
 	return result[0], nil
@@ -271,19 +270,19 @@ func (c *Context) FindKeyPairs(id []byte, label []byte) (signer []Signer, err er
 		return nil, errClosed
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
 	}
 
 	attributes := NewAttributeSet()
 
-	if id != nil {
+	if len(id) > 0 {
 		err = attributes.Set(CkaId, id)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if label != nil {
+	if len(label) > 0 {
 		err = attributes.Set(CkaLabel, label)
 		if err != nil {
 			return nil, err
@@ -311,7 +310,7 @@ func (c *Context) FindKeyPairWithAttributes(attributes AttributeSet) (Signer, er
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("key pair with attributes=%v was not found or is empty", attributes)
 	}
 
 	return result[0], nil
@@ -406,7 +405,7 @@ func (c *Context) FindKey(id []byte, label []byte) (*SecretKey, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("key with id=%x and label=%x was not found or is empty", id, label)
 	}
 
 	return result[0], nil
@@ -420,19 +419,19 @@ func (c *Context) FindKeys(id []byte, label []byte) (key []*SecretKey, err error
 		return nil, errClosed
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
 	}
 
 	attributes := NewAttributeSet()
 
-	if id != nil {
+	if len(id) > 0 {
 		err = attributes.Set(CkaId, id)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if label != nil {
+	if len(label) > 0 {
 		err = attributes.Set(CkaLabel, label)
 		if err != nil {
 			return nil, err
@@ -454,7 +453,7 @@ func (c *Context) FindKeyWithAttributes(attributes AttributeSet) (*SecretKey, er
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("key with attributes=%v was not found or is empty", attributes)
 	}
 
 	return result[0], nil
@@ -569,7 +568,7 @@ func (c *Context) FindPrivateKey(id []byte, label []byte) (PrivateKey, error) {
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("private key with id=%x and label=%x was not found or is empty", id, label)
 	}
 
 	return result[0], nil
@@ -583,19 +582,19 @@ func (c *Context) FindPrivateKeys(id []byte, label []byte) (signer []PrivateKey,
 		return nil, errClosed
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
 	}
 
 	attributes := NewAttributeSet()
 
-	if id != nil {
+	if len(id) > 0 {
 		err = attributes.Set(CkaId, id)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if label != nil {
+	if len(label) > 0 {
 		err = attributes.Set(CkaLabel, label)
 		if err != nil {
 			return nil, err
@@ -618,7 +617,7 @@ func (c *Context) FindPrivateKeyWithAttributes(attributes AttributeSet) (Private
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("private key with attributes=%v was not found or is empty", attributes)
 	}
 
 	return result[0], nil
@@ -776,6 +775,3 @@ func (c *Context) GetPubAttribute(key interface{}, attribute AttributeType) (a *
 
 	return set[attribute], nil
 }
-
-
-

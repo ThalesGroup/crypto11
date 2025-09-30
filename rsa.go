@@ -221,7 +221,7 @@ func (c *Context) FindRSAPrivateKey(id []byte, label []byte) (RSAPrivateKey, err
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("private key with id=%x and label=%x was not found or is empty", id, label)
 	}
 
 	return result[0], nil
@@ -237,19 +237,19 @@ func (c *Context) FindRSAPrivateKeys(id []byte, label []byte) (pks []RSAPrivateK
 		return nil, errClosed
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
 	}
 
 	attributes := NewAttributeSet()
 
-	if id != nil {
+	if len(id) > 0 {
 		err = attributes.Set(CkaId, id)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if label != nil {
+	if len(label) > 0 {
 		err = attributes.Set(CkaLabel, label)
 		if err != nil {
 			return nil, err
@@ -336,7 +336,6 @@ func (c *Context) makeRSAKeyPair(session *pkcs11Session, privHandle *pkcs11.Obje
 	}
 }
 
-
 // FindRSAKeyPair retrieves a previously created asymmetric RSA key pair, or nil if it cannot
 // be found.
 // At least one of id or label must be specified.
@@ -353,7 +352,7 @@ func (c *Context) FindRSAKeyPair(id []byte, label []byte) (SignerDecrypter, erro
 	}
 
 	if len(result) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("key pair with id=%x and label=%x was not found or is empty", id, label)
 	}
 
 	return result[0], nil
@@ -371,19 +370,19 @@ func (c *Context) FindRSAKeyPairs(id []byte, label []byte) (signer []SignerDecry
 		return nil, errClosed
 	}
 
-	if id == nil && label == nil {
-		return nil, errors.New("id and label cannot both be nil")
+	if len(id) == 0 && len(label) == 0 {
+		return nil, errors.New("id and label cannot both be empty")
 	}
 
 	attributes := NewAttributeSet()
 
-	if id != nil {
+	if len(id) > 0 {
 		err = attributes.Set(CkaId, id)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if label != nil {
+	if len(label) > 0 {
 		err = attributes.Set(CkaLabel, label)
 		if err != nil {
 			return nil, err
