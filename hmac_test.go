@@ -62,11 +62,10 @@ func testHmac(t *testing.T, ctx *Context, keyLabel string, keytype int, mech int
 	key, found, err := findKeyOrCreate(ctx, keyLabel, keytype, 256)
 	require.NoError(t, err)
 	require.NotNil(t, key)
-	if ! found {
+	if !found {
 		// so it was created
 		defer key.Delete()
 	}
-
 
 	t.Run("Short", func(t *testing.T) {
 		input := []byte("a short string")

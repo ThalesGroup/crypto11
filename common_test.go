@@ -3,11 +3,10 @@ package crypto11
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
-
-
 
 func skipIfMechUnsupported(t *testing.T, ctx *Context, wantMech uint) {
 	mechs, err := ctx.ctx.GetMechanismList(ctx.slot)
@@ -65,7 +64,7 @@ func makeIV(cipher *SymmetricCipher) ([]byte, error) {
 	return iv, err
 }
 
-func createKey(ctx *Context, keyLabel string, keySize int, KeyType int)(key *SecretKey, err error){
+func createKey(ctx *Context, keyLabel string, keySize int, KeyType int) (key *SecretKey, err error) {
 	id := make([]byte, 16)
 	rand.Read(id)
 	if key, err = ctx.GenerateSecretKeyWithLabel(id, []byte(keyLabel), keySize, Ciphers[KeyType]); err != nil {
@@ -81,9 +80,8 @@ func findKeyOrCreate(ctx *Context, keyLabel string, keyTypeCreation int, keySize
 	if key, err = ctx.FindKey(nil, []byte(keyLabel)); key == nil {
 		found = false
 		key, err = createKey(ctx, keyLabel, keySizeCreation, keyTypeCreation)
-	} else{
+	} else {
 		found = true
 	}
 	return key, found, err
 }
-
