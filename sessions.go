@@ -84,5 +84,5 @@ func (c *Context) resourcePoolFactoryFunc() (pool.Resource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pkcs11Session{c.ctx, session}, nil
+	return &pkcs11Session{c.ctx.Ctx, session}, nil
 }
