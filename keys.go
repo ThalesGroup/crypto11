@@ -231,6 +231,18 @@ func (c *Context) makeKeyPair(session *pkcs11Session, privHandle *pkcs11.ObjectH
 		result.pkcs11PrivateKey.pubKey = pub
 		return result, certificate, nil
 
+	case ckkECEdwards:
+		result := &pkcs11PrivateKeyEd25519{pkcs11PrivateKey: *resultPkcs11PrivateKey}
+		if pubHandle != nil {
+			if pub, err = exportEd25519PublicKey(session, *pubHandle); err != nil {
+				return nil, nil, err
+			}
+			result.pkcs11PrivateKey.pubKeyHandle = *pubHandle
+		}
+
+		result.pkcs11PrivateKey.pubKey = pub
+		return result, certificate, nil
+
 	default:
 		return nil, nil, errors.Errorf("unsupported key type: %X", keyType)
 	}
@@ -547,6 +559,10 @@ func (c *Context) makePrivateKey(session *pkcs11Session, privHandle *pkcs11.Obje
 
 	case pkcs11.CKK_ECDSA:
 		result := &pkcs11PrivateKeyECDSA{pkcs11PrivateKey: resultPkcs11PrivateKey}
+		return result, nil
+
+	case ckkECEdwards:
+		result := &pkcs11PrivateKeyEd25519{pkcs11PrivateKey: resultPkcs11PrivateKey}
 		return result, nil
 
 	default:
