@@ -10,13 +10,7 @@ import (
 )
 
 func TestRandomReader(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		err = ctx.Close()
-		require.NoError(t, err)
-	}()
+	ctx := testContext(t)
 
 	reader, err := ctx.NewRandomReader()
 	require.NoError(t, err)

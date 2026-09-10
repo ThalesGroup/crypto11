@@ -12,11 +12,7 @@ import (
 )
 
 func TestBlockMode(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	// get or generate a new temporary key for encryption / decryption operations in the pkcs11 store
 	key, found, err := findKeyOrCreate(ctx, "aes0", pkcs11.CKK_AES, 256)

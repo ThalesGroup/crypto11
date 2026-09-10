@@ -6,6 +6,9 @@ demo/demo
 .vscode/
 
 /vendor/
+
+# Local test environment: holds a module path and a PIN. Copy .env.template to
+# .env and edit that; only the template is tracked.
 .env
 
 # local override files of any kind, e.g. crypto11.config.json.local
@@ -20,8 +23,13 @@ crypto11-v*.tar.gz
 crypto11-v*.tar.gz.*
 crypto11-v*.intoto.jsonl
 
-# ignore local changes of crypto11.config.json that a user configures to run
-# tests. The user modiiesy the local config with a local PATH for SoftHSMv3.
+# Local test configuration. These hold an absolute path to a PKCS#11 module and
+# a PIN, so they must never be tracked. crypto11.config.json.template is the
+# committed placeholder to copy from; see CONTRIBUTING.md.
+#
+# Note: a rule here has no effect on a file that is already in the index. If
+# crypto11.config.json ever shows up in `git status` as tracked again, the fix
+# is `git rm --cached crypto11.config.json`, not another ignore line.
 crypto11.config.json
 
 # Code assistants

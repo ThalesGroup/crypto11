@@ -46,13 +46,7 @@ func TestNativeECDSA(t *testing.T) {
 }
 
 func TestHardECDSA(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		err = ctx.Close()
-		require.NoError(t, err)
-	}()
+	ctx := testContext(t)
 
 	for _, curve := range curves {
 		id := randomBytes()
@@ -116,14 +110,9 @@ func testEcdsaSigning(t *testing.T, key crypto.Signer, hashFunction crypto.Hash,
 }
 
 func TestEcdsaRequiredArgs(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
-	_, err = ctx.GenerateECDSAKeyPair(nil, elliptic.P224())
+	_, err := ctx.GenerateECDSAKeyPair(nil, elliptic.P224())
 	require.Error(t, err)
 
 	val := randomBytes()

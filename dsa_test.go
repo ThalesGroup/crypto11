@@ -86,13 +86,7 @@ func TestNativeDSA(t *testing.T) {
 func TestHardDSA(t *testing.T) {
 	skipTest(t, skipTestDSA)
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		err = ctx.Close()
-		require.NoError(t, err)
-	}()
+	ctx := testContext(t)
 
 	skipIfMechUnsupported(t, ctx, pkcs11.CKM_DSA_KEY_PAIR_GEN)
 
@@ -169,14 +163,9 @@ func testDsaSigningWithHash(t *testing.T, key crypto.Signer, hashFunction crypto
 }
 
 func TestDsaRequiredArgs(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
-	_, err = ctx.GenerateDSAKeyPair(nil, dsaSizes[dsa.L2048N224])
+	_, err := ctx.GenerateDSAKeyPair(nil, dsaSizes[dsa.L2048N224])
 	require.Error(t, err)
 
 	val := randomBytes()

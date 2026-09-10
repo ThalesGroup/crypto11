@@ -110,8 +110,7 @@ func TestPoolStatsMarshalsToJSON(t *testing.T) {
 // TestContextPoolStats checks the counters against a real token, including
 // while a session is checked out and after the Context is closed.
 func TestContextPoolStats(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
 	before := ctx.PoolStats()
 	require.Positive(t, before.Capacity, "the pool should be able to hand out sessions")
@@ -119,7 +118,7 @@ func TestContextPoolStats(t *testing.T) {
 	assert.Equal(t, before.Capacity, before.Available)
 	assert.Equal(t, int64(0), before.InUse)
 
-	err = ctx.withSession(func(_ *pkcs11Session) error {
+	err := ctx.withSession(func(_ *pkcs11Session) error {
 		stats := ctx.PoolStats()
 		assert.Equal(t, int64(1), stats.InUse, "we are holding a session")
 		assert.Equal(t, before.Available-1, stats.Available)

@@ -14,13 +14,7 @@ import (
 )
 
 func TestHmac(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		err = ctx.Close()
-		require.NoError(t, err)
-	}()
+	ctx := testContext(t)
 
 	// The hash-independent subtests (Empty/MultiSum/Reset) run once, under the plain
 	// SHA256 case, so they exercise a mechanism that (virtually) every HSM supports. The
@@ -63,9 +57,7 @@ func TestHmacSumAfterSessionReleased(t *testing.T) {
 // the fallback was broadened, GenerateSecretKey failed outright on those tokens; here we
 // prove each key generates and then produces a working HMAC.
 func TestGenerateHMACKeyFallback(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-	defer func() { require.NoError(t, ctx.Close()) }()
+	ctx := testContext(t)
 
 	cases := []struct {
 		name   string
@@ -112,9 +104,7 @@ func TestHmacConcurrent(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-	defer func() { require.NoError(t, ctx.Close()) }()
+	ctx := testContext(t)
 
 	skipIfMechUnsupported(t, ctx, pkcs11.CKM_SHA256_HMAC)
 

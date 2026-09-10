@@ -31,8 +31,8 @@ vet:
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 # Plain `go test ./...` works standalone: TestMain (setup_test.go) skips the
-# HSM-backed suite cleanly when neither PKCS11_MODULE nor a pre-existing
-# crypto11.config.json is present.
+# HSM-backed suite cleanly when no PKCS#11 module can be resolved from the
+# environment or a git-ignored local config file.
 #
 # For full coverage (including ML-KEM / PKCS#11 v3.2 tests) against SoftHSMv3:
 #   PKCS11_MODULE=/usr/local/lib/softhsm/libsofthsm3.so go test ./...

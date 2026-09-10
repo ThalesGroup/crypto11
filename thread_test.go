@@ -19,12 +19,7 @@ func TestThreadedRSA(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	id := randomBytes()
 	key, err := ctx.GenerateRSAKeyPair(id, rsaSize)

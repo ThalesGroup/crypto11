@@ -170,6 +170,91 @@ list of the following options:
   in some crypto libraries). Needed for AWS CloudHSM.
 * `DSA` - disables DSA tests. Needed for AWS CloudHSM (and any other tokens not supporting DSA).
 
+## Test configuration
+
+The test suite never reads a tracked file. Configuration is resolved in three layers, each
+overriding the one before:
+
+1. **compiled-in defaults** — `TokenLabel: "crypto11-test"`, `Pin: "1234"`, and *no* module path
+2. **a git-ignored JSON file** — `crypto11.config.json.local`, then `crypto11.config.json`, or
+   whatever `CRYPTO11_CONFIG_FILE` points at
+3. **environment variables**
+
+Two families, by design: **`PKCS11_*` says which token to talk to** (each maps onto a `Config`
+field), **`CRYPTO11_*` controls how the test harness behaves**.
+
+| Variable | Meaning |
+| --- | --- |
+| `PKCS11_MODULE` | absolute path to the PKCS#11 `.so`; `~` and `$VARS` are expanded |
+| `PKCS11_PIN` | `CKU_USER` PIN |
+| `PKCS11_TOKEN_LABEL` | `CKA_LABEL` of the token |
+| `PKCS11_TOKEN_SERIAL` | select by serial instead of label |
+| `PKCS11_SLOT` | select by slot number instead of label |
+| `CRYPTO11_CONFIG_FILE` | override which local file is read |
+| `CRYPTO11_PROVISION` | set to `0` to never create ephemeral tokens (see below) |
+| `CRYPTO11_SKIP` | per-feature skip flags for tokens that misreport support |
+
+Environment last is deliberate: CI configures a run without writing anything into the working
+tree, and your local file never has to be edited to match a runner.
+
+To get started, copy one of the templates — both copies are git-ignored:
+
+```sh
+cp .env.template .env                     # environment variables
+$EDITOR .env                              # set PKCS11_MODULE
+```
+
+or, if you prefer a config file:
+
+```sh
+cp crypto11.config.json.template crypto11.config.json.local
+$EDITOR crypto11.config.json.local        # set "Path" to your module
+```
+
+`.env` is not read automatically — `go test` does not source it. Load it yourself:
+
+```sh
+set -a; . ./.env; set +a
+go test ./...
+```
+
+or point your editor at it (in VS Code, `"go.testEnvFile": "${workspaceFolder}/.env"`).
+
+**Put literal values in `.env`, not shell expressions.** Sourcing it in a shell expands `$HOME`,
+but a dotenv loader — VS Code's `go.testEnvFile` among them — reads the file as plain `key=value`
+and hands over `$HOME/...` with the `$` still in it. The harness expands `$VARS` and a leading `~`
+as a safety net, but a literal path is what works under every loader. `.env` is git-ignored, so
+there is nothing to leak by being explicit.
+
+The module path must be **absolute**. A relative path would let the dynamic linker resolve it
+against `LD_LIBRARY_PATH` or the working directory, and a PKCS#11 module is arbitrary native code
+that runs the moment it is loaded — so a relative path is rejected rather than resolved.
+
+`PKCS11_TOKEN_LABEL`, `PKCS11_TOKEN_SERIAL` and `PKCS11_SLOT` are mutually exclusive —
+PKCS#11 accepts exactly one way to select a token, so setting one clears the other two.
+
+With no module configured anywhere, `go test ./...` narrows to the fuzz targets and passes; a
+clean clone needs no setup to be green.
+
+### Ephemeral tokens, and when not to create them
+
+When `PKCS11_MODULE` is set, `TestMain` provisions three throwaway tokens in a temp directory and
+points the suite at them, so a SoftHSM run is turnkey. Provisioning calls `C_InitToken`.
+`SOFTHSM2_CONF` confines SoftHSM to that temp directory, but a module that ignores it — AWS
+CloudHSM, nCipher nShield, a TPM — **would be initialised in place**.
+
+So when you point `PKCS11_MODULE` at anything that is not a throwaway SoftHSM, turn provisioning
+off and select the token you already have:
+
+```sh
+CRYPTO11_PROVISION=0 PKCS11_MODULE=/opt/nfast/toolkits/pkcs11/libcknfast.so \
+  PKCS11_TOKEN_LABEL=my-token go test ./...
+```
+
+> **Never commit a module path or a PIN.** `crypto11.config.json`, `crypto11.config.json.local`
+> and any other `*.local` file are git-ignored. Only `crypto11.config.json.template`, which
+> contains placeholders, is tracked.
+
 ## Testing with SoftHSMv3 (recommended)
 
 [SoftHSMv3](https://github.com/pqctoday-org/pqctoday-hsm) supports PKCS#11 v3.2 and is required for
@@ -186,8 +271,10 @@ PKCS11_MODULE=/path/to/libsofthsmv3.so PKCS11_PIN=mypin go test ./...
 ```
 
 `TestMain` in `setup_test.go` creates three ephemeral tokens (`crypto11-test`, `token1`, `token2`)
-via the PKCS#11 API, writes a temporary `config` file, runs all tests, then cleans up. No
-external tools or manual token setup are required.
+via the PKCS#11 API, exports the `CRYPTO11_*` variables that point at them, runs all tests, then
+cleans up. No external tools or manual token setup are required, and **nothing is written into the
+working tree** — so an interrupted run cannot leave your module path or PIN in a file git would
+offer to commit.
 
 DSA, DES3, PSS, and HMAC are not supported by SoftHSMv3 and those tests are automatically skipped.
 
@@ -249,7 +336,7 @@ To set up a slot:
 
 ```sh
 $ cat softhsm2.conf
-directories.tokendir = /home/rjk/go/src/github.com/eclipse-keypont/crypto11/tokens
+directories.tokendir = /path/to/crypto11/tokens
 objectstore.backend = file
 log.level = INFO
 $ mkdir tokens
@@ -264,14 +351,21 @@ Please reenter user PIN: ********
 The token has been initialized.
 ```
 
-The configuration looks like this:
+The configuration goes in `crypto11.config.json.local` (git-ignored — see
+[Test configuration](#test-configuration)):
 
 ```json
 {
-  "Path" : "/usr/lib/softhsm/libsofthsm2.so",
+  "Path": "/usr/lib/softhsm/libsofthsm2.so",
   "TokenLabel": "test",
-  "Pin" : "password"
+  "Pin": "password"
 }
+```
+
+or, equivalently, with no file at all:
+
+```sh
+PKCS11_MODULE=/usr/lib/softhsm/libsofthsm2.so PKCS11_TOKEN_LABEL=test CRYPTO11_PROVISION=0 go test ./...
 ```
 
 OAEP is only partial and HMAC is unsupported on SoftHSMv2, so expect test skips.

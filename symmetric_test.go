@@ -14,12 +14,7 @@ import (
 )
 
 func TestHardSymmetric(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	t.Run("AES128", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 128) })
 	t.Run("AES192", func(t *testing.T) { testHardSymmetric(t, ctx, pkcs11.CKK_AES, 192) })
@@ -174,12 +169,7 @@ func testAEADMode(t *testing.T, aead cipher.AEAD, ptlen int, adlen int) {
 }
 
 func BenchmarkCBC(b *testing.B) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(b, err)
-
-	defer func() {
-		require.NoError(b, ctx.Close())
-	}()
+	ctx := testContext(b)
 
 	id := randomBytes()
 	key, err := ctx.GenerateSecretKey(id, 128, Ciphers[pkcs11.CKK_AES])
@@ -223,14 +213,9 @@ func BenchmarkCBC(b *testing.B) {
 }
 
 func TestSymmetricRequiredArgs(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
-	_, err = ctx.GenerateSecretKey(nil, 128, CipherAES)
+	_, err := ctx.GenerateSecretKey(nil, 128, CipherAES)
 	require.Error(t, err)
 
 	val := randomBytes()

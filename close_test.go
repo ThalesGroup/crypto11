@@ -14,10 +14,9 @@ import (
 )
 
 func TestErrorAfterClosed(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	err = ctx.Close()
+	err := ctx.Close()
 	require.NoError(t, err)
 
 	bytes := randomBytes()

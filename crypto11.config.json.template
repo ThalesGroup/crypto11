@@ -1,5 +1,5 @@
 {
-  "Path": "/path/to/softhsmv3/build/src/lib/libsofthsmv3.so",
+  "Path": "/path/to/your/libsofthsm3.so",
   "TokenSerial": "",
   "TokenLabel": "crypto11-test",
   "SlotNumber": null,

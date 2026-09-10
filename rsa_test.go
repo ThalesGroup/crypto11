@@ -24,14 +24,8 @@ import (
 const rsaSize = 2048
 
 func TestNativeRSA(t *testing.T) {
-
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
+	// No token needed: this exercises the software crypto/rsa implementation
+	// that the pkcs11 keys are checked against, so it runs on a clean clone.
 	key, err := rsa.GenerateKey(rand.Reader, rsaSize)
 	require.NoError(t, err)
 
@@ -43,11 +37,7 @@ func TestNativeRSA(t *testing.T) {
 }
 
 func TestHardRSA(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	id := randomBytes()
 	label := randomBytes()
@@ -294,14 +284,9 @@ func testRsaEncryptionOAEP(t *testing.T, key crypto.Decrypter, hashFunction cryp
 }
 
 func TestRsaRequiredArgs(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
+	ctx := testContext(t)
 
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
-
-	_, err = ctx.GenerateRSAKeyPair(nil, 2048)
+	_, err := ctx.GenerateRSAKeyPair(nil, 2048)
 	require.Error(t, err)
 
 	val := randomBytes()

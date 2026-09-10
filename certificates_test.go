@@ -25,19 +25,14 @@ import (
 func TestCertificate(t *testing.T) {
 	skipTest(t, skipTestCert)
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	id := randomBytes()
 	label := randomBytes()
 
 	cert := generateRandomCert(t)
 
-	err = ctx.ImportCertificateWithLabel(id, label, cert)
+	err := ctx.ImportCertificateWithLabel(id, label, cert)
 	require.NoError(t, err)
 
 	cert2, err := ctx.FindCertificate(nil, label, nil)
@@ -61,12 +56,7 @@ func TestCertificate(t *testing.T) {
 func TestCertificateAttributes(t *testing.T) {
 	skipTest(t, skipTestCert)
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	cert := generateRandomCert(t)
 
@@ -98,18 +88,13 @@ func TestCertificateAttributes(t *testing.T) {
 func TestCertificateRequiredArgs(t *testing.T) {
 	skipTest(t, skipTestCert)
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	cert := generateRandomCert(t)
 
 	val := randomBytes()
 
-	err = ctx.ImportCertificateWithLabel(nil, val, cert)
+	err := ctx.ImportCertificateWithLabel(nil, val, cert)
 	require.Error(t, err)
 
 	err = ctx.ImportCertificateWithLabel(val, nil, cert)
@@ -122,12 +107,7 @@ func TestCertificateRequiredArgs(t *testing.T) {
 func TestDeleteCertificate(t *testing.T) {
 	skipTest(t, skipTestCert)
 
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-
-	defer func() {
-		require.NoError(t, ctx.Close())
-	}()
+	ctx := testContext(t)
 
 	randomCert := func() ([]byte, []byte, *x509.Certificate) {
 		id := randomBytes()
@@ -137,7 +117,7 @@ func TestDeleteCertificate(t *testing.T) {
 	}
 	importCertificate := func() ([]byte, []byte, *big.Int) {
 		id, label, cert := randomCert()
-		err = ctx.ImportCertificateWithLabel(id, label, cert)
+		err := ctx.ImportCertificateWithLabel(id, label, cert)
 		require.NoError(t, err)
 
 		cert2, err := ctx.FindCertificate(id, label, cert.SerialNumber)
@@ -148,7 +128,7 @@ func TestDeleteCertificate(t *testing.T) {
 		return id, label, cert.SerialNumber
 	}
 
-	err = ctx.DeleteCertificate(nil, nil, nil)
+	err := ctx.DeleteCertificate(nil, nil, nil)
 	require.Error(t, err)
 
 	id, label, cert := randomCert()

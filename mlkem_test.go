@@ -25,9 +25,7 @@ func mlkemSharedSecretTemplate() AttributeSet {
 }
 
 func TestMLKEM(t *testing.T) {
-	ctx, err := ConfigureFromFile("crypto11.config.json")
-	require.NoError(t, err)
-	defer func() { _ = ctx.Close() }()
+	ctx := testContext(t)
 
 	skipIfMechUnsupported(t, ctx, pkcs11.CKM_ML_KEM_KEY_PAIR_GEN)
 	skipIfMechUnsupported(t, ctx, pkcs11.CKM_ML_KEM)
